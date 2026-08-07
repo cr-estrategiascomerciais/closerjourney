@@ -17,7 +17,7 @@
       <a href="#o-que-e">O que é um Closer</a>
       <a href="#mentoria">A mentoria</a>
       <a href="#para-quem">Pra quem é</a>
-      <a href="depoimentos.html" target="_blank" rel="noopener">Depoimentos</a>
+      <a href="depoimentos.html" class="js-open-depoimentos" rel="noopener">Depoimentos</a>
       <a href="#mentora">Sua mentora</a>
       <a class="btn btn-primary nav-cta" href="#cta">Quero minha vaga</a>
     </nav>
@@ -180,7 +180,7 @@
       <div class="teaser-card"><img src="assets/depoimento3.jpg" alt="Depoimento"></div>
       <div class="teaser-card"><img src="assets/depoimento12.jpg" alt="Depoimento"></div>
     </div>
-    <a class="btn btn-ghost on-dark" href="depoimentos.html" target="_blank" rel="noopener">Ver todos os depoimentos →</a>
+    <a class="btn btn-ghost on-dark js-open-depoimentos" href="depoimentos.html" rel="noopener">Ver todos os depoimentos →</a>
   </div>
 </section>
 
@@ -235,7 +235,7 @@
     <div class="foot-links">
       <a href="#o-que-e">O que é um Closer</a>
       <a href="#mentoria">A mentoria</a>
-      <a href="depoimentos.html" target="_blank" rel="noopener">Depoimentos</a>
+      <a href="depoimentos.html" class="js-open-depoimentos" rel="noopener">Depoimentos</a>
       <a href="https://form.respondi.app/5wZoGyPB" target="_blank" rel="noopener">Aplicar</a>
     </div>
   </div>
@@ -244,6 +244,208 @@
     <span>@acrisrangel</span>
   </div>
 </footer>
+
+<!-- ============ MODAL DE DEPOIMENTOS (ESTILO CELULAR) ============ -->
+<div class="depo-modal" id="depoModal" aria-hidden="true">
+  <div class="depo-modal__overlay" data-depo-close></div>
+
+  <div class="depo-modal__dialog" role="dialog" aria-modal="true" aria-label="Depoimentos">
+    <button class="depo-modal__close" type="button" aria-label="Fechar depoimentos" data-depo-close>
+      <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+
+    <div class="phone">
+      <div class="phone__notch"></div>
+      <div class="phone__screen">
+        <div class="phone__topbar">
+          <span>Depoimentos</span>
+        </div>
+        <div class="phone__scroll">
+          <img src="assets/depoimento1.jpg" alt="Depoimento 1" loading="lazy">
+          <img src="assets/depoimento2.jpg" alt="Depoimento 2" loading="lazy">
+          <img src="assets/depoimento3.jpg" alt="Depoimento 3" loading="lazy">
+          <img src="assets/depoimento4.jpg" alt="Depoimento 4" loading="lazy">
+          <img src="assets/depoimento5.jpg" alt="Depoimento 5" loading="lazy">
+          <img src="assets/depoimento6.jpg" alt="Depoimento 6" loading="lazy">
+          <img src="assets/depoimento7.jpg" alt="Depoimento 7" loading="lazy">
+          <img src="assets/depoimento8.jpg" alt="Depoimento 8" loading="lazy">
+          <img src="assets/depoimento9.jpg" alt="Depoimento 9" loading="lazy">
+          <img src="assets/depoimento11.jpg" alt="Depoimento 11" loading="lazy">
+          <img src="assets/depoimento12.jpg" alt="Depoimento 12" loading="lazy">
+          <img src="assets/depoimento13.jpg" alt="Depoimento 13" loading="lazy">
+        </div>
+      </div>
+      <div class="phone__homebar"></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* ---- Modal de depoimentos estilo celular ---- */
+  .depo-modal{
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .depo-modal.is-open{ display: flex; }
+
+  .depo-modal__overlay{
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 6, 12, .72);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    transition: opacity .25s ease;
+  }
+  .depo-modal.is-open .depo-modal__overlay{ opacity: 1; }
+
+  .depo-modal__dialog{
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: translateY(18px) scale(.97);
+    opacity: 0;
+    transition: transform .3s ease, opacity .3s ease;
+  }
+  .depo-modal.is-open .depo-modal__dialog{
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  .depo-modal__close{
+    position: absolute;
+    top: -46px;
+    right: 0;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: var(--cream, #f2ece7);
+    color: var(--maroon-deep, #4F0C22);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform .15s ease;
+  }
+  .depo-modal__close:hover{ transform: scale(1.08); }
+  .depo-modal__close svg{ width: 18px; height: 18px; }
+
+  .phone{
+    width: min(88vw, 360px);
+    height: min(82vh, 720px);
+    background: var(--maroon-deep, #26060f);
+    border-radius: 38px;
+    padding: 14px 10px;
+    box-shadow: 0 30px 70px rgba(0,0,0,.5), 0 0 0 2px rgba(255,255,255,.05) inset;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .phone__notch{
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 20px;
+    background: var(--maroon-deep, #1c0509);
+    border-radius: 14px;
+    z-index: 2;
+  }
+  .phone__screen{
+    flex: 1;
+    background: #12070c;
+    border-radius: 26px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding-top: 34px;
+  }
+  .phone__topbar{
+    text-align: center;
+    font-family: 'Jost', sans-serif;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-size: .72rem;
+    color: var(--rose, #d98aa0);
+    padding: 6px 0 10px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    flex-shrink: 0;
+  }
+  .phone__scroll{
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 8px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--rose, #7A2340) transparent;
+  }
+  .phone__scroll::-webkit-scrollbar{ width: 6px; }
+  .phone__scroll::-webkit-scrollbar-track{ background: transparent; }
+  .phone__scroll::-webkit-scrollbar-thumb{
+    background: var(--rose, #7A2340);
+    border-radius: 10px;
+  }
+  .phone__scroll img{
+    width: 100%;
+    display: block;
+    border-radius: 12px;
+  }
+  .phone__homebar{
+    width: 110px;
+    height: 4px;
+    background: rgba(255,255,255,.35);
+    border-radius: 3px;
+    margin: 10px auto 2px;
+  }
+
+  @media (max-width: 480px){
+    .phone{ width: 92vw; height: 86vh; }
+    .depo-modal__close{ top: -44px; }
+  }
+</style>
+
+<script>
+(function(){
+  var modal = document.getElementById('depoModal');
+  if(!modal) return;
+
+  var triggers = document.querySelectorAll('.js-open-depoimentos');
+  var closers = modal.querySelectorAll('[data-depo-close]');
+  var lastFocused = null;
+
+  function openModal(e){
+    if(e) e.preventDefault();
+    lastFocused = document.activeElement;
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal(){
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    if(lastFocused) lastFocused.focus();
+  }
+
+  triggers.forEach(function(t){ t.addEventListener('click', openModal); });
+  closers.forEach(function(c){ c.addEventListener('click', closeModal); });
+
+  document.addEventListener('keydown', function(e){
+    if(e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+  });
+})();
+</script>
 
 </body>
 </html>
