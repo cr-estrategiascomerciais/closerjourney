@@ -485,7 +485,7 @@
     background: var(--rose, #7A2340);
     border-radius: 10px;
   }
-  .phone__scroll img{
+  .phone__scroll img:not(.depo-card__avatar){
     width: 100%;
     display: block;
     border-radius: 12px;
@@ -577,6 +577,7 @@
   }
 </style>
 
+<script src="https://www.youtube.com/iframe_api"></script>
 <script>
 (function(){
   var modal = document.getElementById('depoModal');
@@ -599,6 +600,7 @@
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
     if(lastFocused) lastFocused.focus();
+    pauseAllVideos();
   }
 
   triggers.forEach(function(t){ t.addEventListener('click', openModal); });
@@ -608,39 +610,35 @@
     if(e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
   });
 
-  // Pausa o outro vídeo do YouTube automaticamente quando um deles é reproduzido
-  var videoIframes = modal.querySelectorAll('.phone__video-wrap iframe');
+  // ---- Pausa o outro vídeo do YouTube automaticamente quando um deles é reproduzido ----
+  var ytPlayers = [];
+  var ytVideoIds = ['depoVideo1', 'depoVideo2'];
 
-  function postToPlayer(iframe, func){
-    if(!iframe || !iframe.contentWindow) return;
-    iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: [] }), '*');
+  function pauseAllVideos(){
+    ytPlayers.forEach(function(p){
+      if(p && typeof p.pauseVideo === 'function') p.pauseVideo();
+    });
   }
 
-  videoIframes.forEach(function(iframe){
-    iframe.addEventListener('load', function(){
-      iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: iframe.id }), '*');
-    });
-  });
+  function onPlayerStateChange(event){
+    if(event.data === YT.PlayerState.PLAYING){
+      ytPlayers.forEach(function(p){
+        if(p !== event.target && typeof p.pauseVideo === 'function'){
+          p.pauseVideo();
+        }
+      });
+    }
+  }
 
-  window.addEventListener('message', function(e){
-    var data;
-    try { data = JSON.parse(e.data); } catch(err){ return; }
-    if(data.event !== 'onStateChange') return;
-    if(data.info !== 1) return; // 1 = playing
-
-    videoIframes.forEach(function(iframe){
-      if(iframe.contentWindow !== e.source){
-        postToPlayer(iframe, 'pauseVideo');
-      }
+  window.onYouTubeIframeAPIReady = function(){
+    ytVideoIds.forEach(function(id){
+      if(!document.getElementById(id)) return;
+      var player = new YT.Player(id, {
+        events: { onStateChange: onPlayerStateChange }
+      });
+      ytPlayers.push(player);
     });
-  });
-
-  // Ao fechar o modal, pausa todos os vídeos
-  closers.forEach(function(c){
-    c.addEventListener('click', function(){
-      videoIframes.forEach(function(iframe){ postToPlayer(iframe, 'pauseVideo'); });
-    });
-  });
+  };
 })();
 </script>
 
