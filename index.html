@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Closer Journey — Mentoria de Transição de Carreira</title>
+<title>Closer Journey • Mentoria de Transição de Carreira</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" type="image/png" href="/assets/favicon.png">
 </head>
@@ -266,8 +266,11 @@
               <img class="depo-card__avatar" src="assets/cris-foto-nova.jpg" alt="Cris Rangel">
               <span class="depo-card__handle">@acrisrangel<svg class="depo-card__badge" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 1.3 2.7-.4 1.3 2.4 2.4 1.3-.4 2.7 1.3 2.4-1.3 2.4.4 2.7-2.4 1.3-1.3 2.4-2.7-.4L12 22l-2.4-1.3-2.7.4-1.3-2.4-2.4-1.3.4-2.7L2.3 12l1.3-2.4-.4-2.7 2.4-1.3 1.3-2.4 2.7.4L12 2z"/><path d="M9 12.5l2 2 4-4.5" stroke="#4F0C22" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
             </div>
-            <div class="phone__video-wrap">
-              <iframe class="depo-yt-frame" id="depoVideo1" src="https://www.youtube.com/embed/Y6XpZt5BRQE?enablejsapi=1" title="Depoimento em vídeo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+            <div class="phone__video-wrap yt-facade" id="ytFacade1" data-yt-id="Y6XpZt5BRQE">
+              <img class="yt-facade__thumb" src="https://img.youtube.com/vi/Y6XpZt5BRQE/hqdefault.jpg" alt="" loading="lazy">
+              <button class="yt-facade__play" type="button" aria-label="Reproduzir vídeo">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </button>
             </div>
           </div>
           <div class="depo-card depo-card--video">
@@ -275,8 +278,11 @@
               <img class="depo-card__avatar" src="assets/cris-foto-nova.jpg" alt="Cris Rangel">
               <span class="depo-card__handle">@acrisrangel<svg class="depo-card__badge" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 1.3 2.7-.4 1.3 2.4 2.4 1.3-.4 2.7 1.3 2.4-1.3 2.4.4 2.7-2.4 1.3-1.3 2.4-2.7-.4L12 22l-2.4-1.3-2.7.4-1.3-2.4-2.4-1.3.4-2.7L2.3 12l1.3-2.4-.4-2.7 2.4-1.3 1.3-2.4 2.7.4L12 2z"/><path d="M9 12.5l2 2 4-4.5" stroke="#4F0C22" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
             </div>
-            <div class="phone__video-wrap">
-              <iframe class="depo-yt-frame" id="depoVideo2" src="https://www.youtube.com/embed/68ccqgZpCwA?enablejsapi=1" title="Depoimento em vídeo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+            <div class="phone__video-wrap yt-facade" id="ytFacade2" data-yt-id="68ccqgZpCwA">
+              <img class="yt-facade__thumb" src="https://img.youtube.com/vi/68ccqgZpCwA/hqdefault.jpg" alt="" loading="lazy">
+              <button class="yt-facade__play" type="button" aria-label="Reproduzir vídeo">
+                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              </button>
             </div>
           </div>
           <div class="depo-card">
@@ -563,6 +569,49 @@
     color: #fff;
     text-shadow: 0 1px 4px rgba(0,0,0,.5);
   }
+
+  /* ---- Capa própria do vídeo (sem marca do YouTube até o clique) ---- */
+  .yt-facade{
+    cursor: pointer;
+    background: #000;
+  }
+  .yt-facade__thumb{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .yt-facade__play{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 60px;
+    height: 60px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(199, 47, 81, .92);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 2;
+    box-shadow: 0 6px 22px rgba(0,0,0,.4);
+    transition: transform .15s ease;
+  }
+  .yt-facade__play:hover{ transform: translate(-50%, -50%) scale(1.08); }
+  .yt-facade__play svg{ width: 26px; height: 26px; margin-left: 3px; }
+  .yt-facade iframe{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+  }
   .phone__homebar{
     width: 110px;
     height: 4px;
@@ -610,9 +659,8 @@
     if(e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
   });
 
-  // ---- Pausa o outro vídeo do YouTube automaticamente quando um deles é reproduzido ----
+  // ---- Capa própria do vídeo: só carrega o player real do YouTube ao clicar ----
   var ytPlayers = [];
-  var ytVideoIds = ['depoVideo1', 'depoVideo2'];
 
   function pauseAllVideos(){
     ytPlayers.forEach(function(p){
@@ -630,14 +678,41 @@
     }
   }
 
-  window.onYouTubeIframeAPIReady = function(){
-    ytVideoIds.forEach(function(id){
-      if(!document.getElementById(id)) return;
-      var player = new YT.Player(id, {
-        events: { onStateChange: onPlayerStateChange }
-      });
-      ytPlayers.push(player);
+  function playFacade(facade){
+    if(!facade || facade.dataset.playing === '1') return;
+    facade.dataset.playing = '1';
+
+    var videoId = facade.getAttribute('data-yt-id');
+    var frameId = facade.id + '-frame';
+
+    facade.innerHTML = '';
+    var iframe = document.createElement('iframe');
+    iframe.id = frameId;
+    iframe.src = 'https://www.youtube-nocookie.com/embed/' + videoId +
+      '?autoplay=1&enablejsapi=1&rel=0&modestbranding=1&playsinline=1';
+    iframe.title = 'Depoimento em vídeo';
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    iframe.allowFullscreen = true;
+    facade.appendChild(iframe);
+
+    // Pausa imediatamente os outros players já ativos
+    ytPlayers.forEach(function(p){
+      if(p && typeof p.pauseVideo === 'function') p.pauseVideo();
     });
+
+    var player = new YT.Player(frameId, {
+      events: { onStateChange: onPlayerStateChange }
+    });
+    ytPlayers.push(player);
+  }
+
+  var facades = modal.querySelectorAll('.yt-facade');
+  facades.forEach(function(facade){
+    facade.addEventListener('click', function(){ playFacade(facade); });
+  });
+
+  window.onYouTubeIframeAPIReady = function(){
+    // A API carrega em segundo plano; os players só são criados quando o usuário clica em play
   };
 })();
 </script>
