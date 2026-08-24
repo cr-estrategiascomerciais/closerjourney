@@ -261,6 +261,12 @@
           <span>Depoimentos</span>
         </div>
         <div class="phone__scroll">
+          <div class="phone__video-wrap">
+            <iframe src="https://www.youtube.com/embed/Y6XpZt5BRQE" title="Depoimento em vídeo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+          </div>
+          <div class="phone__video-wrap">
+            <iframe src="https://www.youtube.com/embed/68ccqgZpCwA" title="Depoimento em vídeo" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+          </div>
           <img src="assets/depoimento1.jpg" alt="Depoimento 1" loading="lazy">
           <img src="assets/depoimento2.jpg" alt="Depoimento 2" loading="lazy">
           <img src="assets/depoimento3.jpg" alt="Depoimento 3" loading="lazy">
@@ -399,6 +405,23 @@
     width: 100%;
     display: block;
     border-radius: 12px;
+  }
+  .phone__video-wrap{
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #000;
+    flex-shrink: 0;
+  }
+  .phone__video-wrap iframe{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
   }
   .phone__homebar{
     width: 110px;
