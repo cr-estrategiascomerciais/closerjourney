@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Área de Embarque | Closer Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="area.css">
+</head>
+<body class="area">
+
+<!-- ======= carregando ======= -->
+<div id="v-loading" class="loading"><div class="spinner"></div>Preparando seu embarque...</div>
+
+<!-- ======= firebase nao configurado ======= -->
+<div id="v-setup" class="login-shell" hidden>
+  <div class="ticket-card">
+    <h1>Quase lá</h1>
+    <p class="lead">O Firebase ainda não foi configurado. Preencha o arquivo <b>firebase-config.js</b> seguindo o GUIA-FIREBASE.md.</p>
+  </div>
+</div>
+
+<!-- ======= login ======= -->
+<div id="v-login" class="login-shell" hidden>
+  <div class="ticket-card">
+    <img class="logo" src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
+    <h1>Área de Embarque</h1>
+    <p class="lead">Use o e-mail e a senha que a Cris enviou para você.</p>
+    <hr>
+    <form id="login-form" class="f" novalidate>
+      <label>E-mail
+        <input id="l-email" type="email" autocomplete="username" required>
+      </label>
+      <label>Senha
+        <input id="l-pass" type="password" autocomplete="current-password" required>
+      </label>
+      <div id="l-msg" class="msg err" hidden></div>
+      <button class="btn btn-primary" type="submit" id="l-btn">Entrar</button>
+      <button class="link-btn" type="button" id="l-forgot">Esqueci minha senha</button>
+    </form>
+    <p style="text-align:center;margin:18px 0 0;font-size:14px"><a class="link-btn" href="index.html">Voltar para o site</a></p>
+  </div>
+</div>
+
+<!-- ======= sem acesso ======= -->
+<div id="v-denied" class="login-shell" hidden>
+  <div class="ticket-card">
+    <img class="logo" src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
+    <h1>Acesso não liberado</h1>
+    <p class="lead" id="denied-text">Seu login existe, mas ainda não está liberado para a Área de Embarque. Fale com a Cris.</p>
+    <button class="btn btn-ghost" id="denied-out" type="button" style="width:100%">Sair</button>
+  </div>
+</div>
+
+<!-- ======= app ======= -->
+<div id="v-app" hidden>
+  <header class="a-topbar">
+    <div class="inner">
+      <a class="brand" href="index.html"><img src="assets/logo-horiz-dark-on-transparent.png" alt="Closer Journey"></a>
+      <div class="who">
+        <span class="nm">Olá, <strong id="who-name"></strong></span>
+        <a id="admin-link" class="link-btn" href="admin.html" hidden>Painel da Cris</a>
+        <button class="link-btn" id="logout" type="button">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="a-wrap">
+    <!-- lista -->
+    <section id="s-home">
+      <span class="eyebrow">Área de Embarque</span>
+      <h1 class="a-title" id="hello">Bem-vinda a bordo</h1>
+      <p class="a-sub">Cada etapa só abre depois que você finaliza a anterior. É assim que a jornada funciona.</p>
+
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="tab-trilha" aria-selected="true">Minha jornada</button>
+        <button class="tab" role="tab" id="tab-cal" aria-selected="false">Calendário de encontros</button>
+      </div>
+
+      <div id="p-trilha">
+        <div class="progress-card">
+          <h2>Seu progresso</h2><div class="pct" id="pct">0%</div>
+          <div class="bar"><i id="bar" style="width:0"></i></div>
+        </div>
+        <div id="next-up"></div>
+        <div id="trail"></div>
+      </div>
+
+      <div id="p-cal" hidden>
+        <div class="cal-top">
+          <h3 id="cal-title"></h3>
+          <div class="cal-nav">
+            <button type="button" id="cal-prev" aria-label="Mês anterior">&larr;</button>
+            <button type="button" id="cal-today">Hoje</button>
+            <button type="button" id="cal-next" aria-label="Próximo mês">&rarr;</button>
+          </div>
+        </div>
+        <div id="cal"></div>
+        <div class="legend">
+          <span><i class="t-hotseat"></i>Hotseat</span>
+          <span><i class="t-roleplay"></i>Roleplay</span>
+          <span><i class="t-aula"></i>Aula ao vivo</span>
+          <span><i class="t-outro"></i>Outro</span>
+        </div>
+        <h3 class="h-agenda">Próximos encontros</h3>
+        <ul class="agenda" id="agenda"></ul>
+      </div>
+    </section>
+
+    <!-- aula -->
+    <section id="s-lesson" hidden></section>
+  </main>
+</div>
+
+<!-- modal de encontro -->
+<div class="modal" id="ev-modal" hidden><div class="box" id="ev-box"></div></div>
+<div id="toast" hidden></div>
+
+<script type="module" src="embarque.js"></script>
+</body>
+</html>

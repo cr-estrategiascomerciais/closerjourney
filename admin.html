@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel da Cris | Closer Journey</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="area.css">
+</head>
+<body class="area">
+
+<div id="v-loading" class="loading"><div class="spinner"></div>Carregando painel...</div>
+
+<div id="v-setup" class="login-shell" hidden>
+  <div class="ticket-card">
+    <h1>Quase lá</h1>
+    <p class="lead">O Firebase ainda não foi configurado. Preencha o arquivo <b>firebase-config.js</b> seguindo o GUIA-FIREBASE.md.</p>
+  </div>
+</div>
+
+<div id="v-login" class="login-shell" hidden>
+  <div class="ticket-card">
+    <img class="logo" src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
+    <h1>Painel da Cris</h1>
+    <p class="lead">Acesso restrito à administração.</p>
+    <hr>
+    <form id="login-form" class="f" novalidate>
+      <label>E-mail <input id="l-email" type="email" autocomplete="username" required></label>
+      <label>Senha <input id="l-pass" type="password" autocomplete="current-password" required></label>
+      <div id="l-msg" class="msg err" hidden></div>
+      <button class="btn btn-primary" type="submit" id="l-btn">Entrar</button>
+    </form>
+  </div>
+</div>
+
+<div id="v-denied" class="login-shell" hidden>
+  <div class="ticket-card">
+    <h1>Acesso restrito</h1>
+    <p class="lead">Este login não tem permissão de administração.</p>
+    <p style="display:grid;gap:10px">
+      <a class="btn btn-primary" href="embarque.html">Ir para a Área de Embarque</a>
+      <button class="btn btn-ghost" id="denied-out" type="button">Sair</button>
+    </p>
+  </div>
+</div>
+
+<div id="v-app" hidden>
+  <header class="a-topbar">
+    <div class="inner">
+      <a class="brand" href="embarque.html"><img src="assets/logo-horiz-dark-on-transparent.png" alt="Closer Journey"></a>
+      <div class="who">
+        <a class="link-btn" href="embarque.html">Ver como aluna</a>
+        <button class="link-btn" id="logout" type="button">Sair</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="a-wrap">
+    <span class="eyebrow">Administração</span>
+    <h1 class="a-title">Painel da Cris</h1>
+    <p class="a-sub">Gerencie aulas, atividades, encontros e acessos das alunas.</p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-tab="aulas" aria-selected="true">Aulas e atividades</button>
+      <button class="tab" role="tab" data-tab="cal" aria-selected="false">Calendário</button>
+      <button class="tab" role="tab" data-tab="alunas" aria-selected="false">Alunas</button>
+    </div>
+
+    <!-- AULAS -->
+    <section id="t-aulas">
+      <div class="toolbar">
+        <div class="btn-row">
+          <button class="btn btn-primary small" id="new-aula" type="button">+ Nova aula</button>
+          <button class="btn btn-ghost small" id="new-ativ" type="button">+ Nova atividade</button>
+        </div>
+        <button class="btn btn-ghost small" id="seed" type="button" hidden>Carregar trilha sugerida</button>
+      </div>
+      <div id="lessons"></div>
+    </section>
+
+    <!-- CALENDARIO -->
+    <section id="t-cal" hidden>
+      <div class="panel">
+        <h3>Cadastrar vários encontros de uma vez</h3>
+        <p class="sub">Exemplo: todos os hotseats, a cada 2 semanas, às quintas, às 14h. Depois você pode ajustar ou excluir cada encontro clicando nele no calendário.</p>
+        <form id="bulk-form" class="f">
+          <div class="row">
+            <label>Título <input id="b-title" required placeholder="Hotseat"></label>
+            <label>Tipo
+              <select id="b-type">
+                <option value="hotseat">Hotseat</option>
+                <option value="roleplay">Roleplay</option>
+                <option value="aula">Aula ao vivo</option>
+                <option value="outro">Outro</option>
+              </select>
+            </label>
+          </div>
+          <div class="row3">
+            <label>Primeira data <input id="b-start" type="date" required></label>
+            <label>Horário (Brasília) <input id="b-time" type="time" value="14:00" required></label>
+            <label>Duração (min) <input id="b-dur" type="number" min="15" step="5" value="90"></label>
+          </div>
+          <div class="row3">
+            <label>Dia da semana
+              <select id="b-wd">
+                <option value="1">Segunda-feira</option><option value="2">Terça-feira</option>
+                <option value="3">Quarta-feira</option><option value="4" selected>Quinta-feira</option>
+                <option value="5">Sexta-feira</option><option value="6">Sábado</option><option value="0">Domingo</option>
+              </select>
+            </label>
+            <label>Repetir
+              <select id="b-step">
+                <option value="7">Toda semana</option>
+                <option value="14" selected>A cada 2 semanas (quinzenal)</option>
+                <option value="21">A cada 3 semanas</option>
+                <option value="28">A cada 4 semanas</option>
+              </select>
+            </label>
+            <label>Quantos encontros <input id="b-count" type="number" min="1" max="60" value="6"></label>
+          </div>
+          <label>Link da sala (Meet, Zoom...) <input id="b-link" type="url" placeholder="https://"></label>
+          <label>Observações <textarea id="b-notes" placeholder="Opcional. Ex.: leve o seu caso para discutir."></textarea></label>
+          <div><b style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft)">Prévia</b>
+            <ul class="preview" id="b-prev"></ul></div>
+          <div id="b-msg" class="msg" hidden></div>
+          <div class="btn-row"><button class="btn btn-primary" id="b-go" type="submit">Criar encontros</button></div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <div class="toolbar" style="margin-bottom:6px">
+          <div>
+            <h3>Calendário dos encontros</h3>
+            <p class="sub" style="margin:0">Clique em um encontro para mudar data, horário, link ou excluir.</p>
+          </div>
+          <button class="btn btn-ghost small" id="one-ev" type="button">+ Encontro avulso</button>
+        </div>
+        <div class="cal-top">
+          <h3 id="cal-title" style="font-size:22px"></h3>
+          <div class="cal-nav">
+            <button type="button" id="cal-prev">&larr;</button>
+            <button type="button" id="cal-today">Hoje</button>
+            <button type="button" id="cal-next">&rarr;</button>
+          </div>
+        </div>
+        <div id="cal"></div>
+        <div class="legend">
+          <span><i class="t-hotseat"></i>Hotseat</span><span><i class="t-roleplay"></i>Roleplay</span>
+          <span><i class="t-aula"></i>Aula ao vivo</span><span><i class="t-outro"></i>Outro</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ALUNAS -->
+    <section id="t-alunas" hidden>
+      <div class="panel">
+        <h3>Nova aluna</h3>
+        <p class="sub">Cria o login e a senha provisória. Copie os dados e envie para a aluna (ela pode trocar a senha pelo "Esqueci minha senha").</p>
+        <form id="stu-form" class="f">
+          <div class="row">
+            <label>Nome <input id="s-name" required></label>
+            <label>E-mail <input id="s-email" type="email" required></label>
+          </div>
+          <label>Senha provisória <input id="s-pass" required minlength="6"></label>
+          <div id="s-msg" class="msg" hidden></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="s-go" type="submit">Criar acesso</button>
+            <button class="btn btn-ghost small" id="s-gen" type="button">Gerar outra senha</button>
+          </div>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Alunas</h3>
+        <p class="sub">Desativar bloqueia o acesso na hora. O progresso é mantido.</p>
+        <ul class="a-list" id="students"></ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
+<div id="toast" hidden></div>
+
+<script type="module" src="admin.js"></script>
+</body>
+</html>
