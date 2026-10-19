@@ -9,9 +9,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css">
+<link rel="stylesheet" href="area.css?v=3">
 </head>
-<body class="area">
+<body class="area embarque">
 
 <div id="v-loading" class="loading"><div class="spinner"></div>Carregando painel...</div>
 
@@ -51,7 +51,7 @@
 <div id="v-app" hidden>
   <header class="a-topbar">
     <div class="inner">
-      <a class="brand" href="embarque.html"><img src="assets/logo-horiz-dark-on-transparent.png" alt="Closer Journey"></a>
+      <a class="brand" href="embarque.html"><img src="assets/logo-full-cream-on-transparent.png" alt="Closer Journey"></a>
       <div class="who">
         <a class="link-btn" href="embarque.html">Ver como aluna</a>
         <button class="link-btn" id="logout" type="button">Sair</button>
@@ -59,7 +59,7 @@
     </div>
   </header>
 
-  <main class="a-wrap">
+  <main class="a-wrap wide">
     <span class="eyebrow">Administração</span>
     <h1 class="a-title">Painel da Cris</h1>
     <p class="a-sub">Gerencie aulas, atividades, encontros e acessos das alunas.</p>
@@ -72,14 +72,25 @@
 
     <!-- AULAS -->
     <section id="t-aulas">
-      <div class="toolbar">
-        <div class="btn-row">
-          <button class="btn btn-primary small" id="new-aula" type="button">+ Nova aula</button>
-          <button class="btn btn-ghost small" id="new-ativ" type="button">+ Nova atividade</button>
+      <div class="a-layout">
+        <aside class="side" aria-label="Estrutura da trilha">
+          <div class="side-card">
+            <div class="side-title">Estrutura da trilha</div>
+            <div id="a-side"></div>
+            <button class="btn btn-primary small side-add" id="new-mod" type="button">+ Novo módulo</button>
+          </div>
+        </aside>
+        <div class="a-main">
+          <div class="toolbar">
+            <div class="btn-row">
+              <button class="btn btn-primary small" id="new-aula" type="button">+ Nova aula</button>
+              <button class="btn btn-ghost on-dark small" id="new-ativ" type="button">+ Nova atividade</button>
+            </div>
+            <button class="btn btn-ghost on-dark small" id="seed" type="button" hidden>Carregar trilha sugerida</button>
+          </div>
+          <div id="lessons"></div>
         </div>
-        <button class="btn btn-ghost small" id="seed" type="button" hidden>Carregar trilha sugerida</button>
       </div>
-      <div id="lessons"></div>
     </section>
 
     <!-- CALENDARIO -->
@@ -185,6 +196,6 @@
 <div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="admin.js"></script>
+<script type="module" src="admin.js?v=3"></script>
 </body>
 </html>
