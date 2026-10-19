@@ -9,9 +9,9 @@ import {
   writeBatch, Timestamp, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
-  esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, fieldsToText, groupFields, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
+  esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword
-} from './cj-utils.js?v=5';
+} from './cj-utils.js?v=6';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
@@ -228,12 +228,22 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
         <label>PDF da atividade <span class="hint">Cole o link do PDF no Google Drive (compartilhado como "Qualquer pessoa com o link"). Ele aparece dentro da página da aluna.</span>
           <input id="m-pdf" value="${esc(l ? l.pdfUrl : '')}" placeholder="https://drive.google.com/file/d/..."></label>
         <div id="m-pdfcheck" class="msg" hidden></div>
-        <label class="check"><input type="checkbox" id="m-fb" ${l && l.feedbackEnabled ? 'checked' : ''}> Permitir feedback da Cris (a aluna envia a resposta e você corrige)</label>
-        <div id="m-fields" class="sub-grid" ${l && l.feedbackEnabled ? '' : 'hidden'}>
-          <label>Campos da resposta (entregáveis) <span class="hint">Opcional. Um campo por linha. "## Nome" cria uma seção, "Campo | dica" adiciona uma dica e "(opcional)" no fim do nome dispensa o preenchimento. Sem campos, a aluna responde em um texto livre.</span>
-            <textarea id="m-fields-text" rows="11" placeholder="## Descoberta&#10;Recuo Estratégico&#10;Perguntas de situação&#10;&#10;## Encantamento&#10;Abertura do encantamento&#10;Autoridade">${esc(l ? fieldsToText(l.fields) : '')}</textarea></label>
-          <div id="m-fcount" class="msg ok" hidden></div>
+        <div id="m-fields" class="sub-grid">
+          <div class="q-intro"><b>Perguntas da atividade</b>
+            <span class="hint">Monte a "prova" que a aluna vai responder. Use perguntas de texto e de múltipla escolha. Sem nenhuma pergunta, a aluna responde em um texto livre.</span></div>
+          <div id="m-qlist" class="q-list"></div>
+          <div class="btn-row q-add">
+            <button class="btn btn-ghost small" type="button" id="q-add-t">+ Pergunta de texto</button>
+            <button class="btn btn-ghost small" type="button" id="q-add-m">+ Múltipla escolha</button>
+            <button class="link-btn" type="button" id="q-imp-t">Importar lista de perguntas</button>
+          </div>
+          <div id="q-imp" hidden>
+            <label>Cole a lista, uma pergunta por linha <span class="hint">"## Nome" cria uma seção. "Pergunta | dica" adiciona uma dica. "(opcional)" no fim dispensa o preenchimento. Tudo vira pergunta de texto.</span>
+              <textarea id="q-imp-text" rows="8" placeholder="## Descoberta&#10;Recuo Estratégico&#10;Perguntas de situação&#10;&#10;## Encantamento&#10;Autoridade"></textarea></label>
+            <div class="btn-row"><button class="btn btn-primary small" type="button" id="q-imp-go">Adicionar à lista</button></div>
+          </div>
         </div>
+        <label class="check"><input type="checkbox" id="m-fb" ${l && l.feedbackEnabled ? 'checked' : ''}> Permitir feedback da Cris <span class="hint">Toda atividade tem um campo para a aluna responder. Marque aqui se você vai corrigir e devolver os pontos de melhoria.</span></label>
       </div>
       <label>Link do vídeo <span class="hint">Google Drive, YouTube (pode ser não listado) ou Vimeo</span>
         <input id="m-video" value="${esc(l ? l.videoUrl : '')}" placeholder="https://youtu.be/..."></label>
@@ -265,15 +275,97 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
     else flash(el, 'Link fora do Google Drive: a aluna verá um botão "Abrir PDF" em vez do PDF dentro da página.', 'warn');
   };
   $('m-pdf').addEventListener('input', pdfcheck); pdfcheck();
-  const fcount = () => {
-    const f = parseFields($('m-fields-text').value, l && l.fields);
-    const el = $('m-fcount');
-    if (!f.length) { el.hidden = true; return; }
-    const secs = new Set(f.map((x) => x.section)).size;
-    flash(el, `${f.length} campo${f.length > 1 ? 's' : ''} em ${secs} seç${secs > 1 ? 'ões' : 'ão'}.`, 'ok');
+  /* construtor de perguntas */
+  let qs = normalizeFields(l && l.fields);
+  const used = new Set();
+  qs.forEach((q) => { used.add(q.id); (q.options || []).forEach((o) => used.add(o.id)); });
+  const LET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const drawQ = () => {
+    const box = $('m-qlist');
+    if (!qs.length) { box.innerHTML = '<div class="q-empty">Nenhuma pergunta ainda. A aluna verá um campo de texto livre.</div>'; return; }
+    box.innerHTML = qs.map((q, i) => {
+      const multi = q.type === 'multipla';
+      const opts = multi ? `<div class="q-opts">
+          ${q.options.map((o, j) => `<div class="q-opt">
+            <label class="q-ok" title="Marcar como correta"><input type="radio" name="qc-${i}" data-qi="${i}" data-corr="${esc(o.id)}" ${q.correct === o.id ? 'checked' : ''}><span>${LET[j] || j + 1}</span></label>
+            <input data-qi="${i}" data-oi="${j}" value="${esc(o.text)}" placeholder="Alternativa ${LET[j] || j + 1}">
+            <button class="icon-btn" type="button" data-qi="${i}" data-odel="${j}" title="Remover alternativa" ${q.options.length <= 2 ? 'disabled' : ''}>&times;</button>
+          </div>`).join('')}
+          <div class="q-optfoot"><button class="link-btn" type="button" data-qi="${i}" data-oadd="1">+ Alternativa</button>
+            <span class="hint">Marque a alternativa correta (opcional). Se marcar, a aluna vê se acertou depois de enviar.</span>
+            ${q.correct ? `<button class="link-btn" type="button" data-qi="${i}" data-nocorr="1">Limpar correta</button>` : ''}</div>
+        </div>` : '';
+      return `<div class="q-card">
+        <div class="q-head"><span class="q-n">Pergunta ${i + 1}</span>
+          <span class="q-type">${multi ? 'Múltipla escolha' : 'Texto'}</span>
+          <span class="q-acts">
+            <button class="icon-btn" type="button" data-qi="${i}" data-qmv="-1" ${i === 0 ? 'disabled' : ''} title="Subir">&uarr;</button>
+            <button class="icon-btn" type="button" data-qi="${i}" data-qmv="1" ${i === qs.length - 1 ? 'disabled' : ''} title="Descer">&darr;</button>
+            <button class="icon-btn" type="button" data-qi="${i}" data-qdel="1" title="Excluir pergunta">&times;</button></span></div>
+        <label>Enunciado <textarea data-qi="${i}" data-k="label" rows="2">${esc(q.label)}</textarea></label>
+        <div class="row">
+          <label>Seção <span class="hint">Opcional. Agrupa perguntas.</span><input data-qi="${i}" data-k="section" value="${esc(q.section)}" list="q-secs" placeholder="Ex.: Descoberta"></label>
+          <label>Dica <span class="hint">Opcional.</span><input data-qi="${i}" data-k="hint" value="${esc(q.hint)}"></label>
+        </div>
+        ${opts}
+        <label class="check"><input type="checkbox" data-qi="${i}" data-k="optional" ${q.optional ? 'checked' : ''}> Resposta opcional</label>
+      </div>`;
+    }).join('') + `<datalist id="q-secs">${[...new Set(qs.map((q) => q.section).filter(Boolean))].map((x) => `<option value="${esc(x)}">`).join('')}</datalist>`;
   };
-  $('m-fields-text').addEventListener('input', fcount); fcount();
-  $('m-fb').addEventListener('change', () => { $('m-fields').hidden = !$('m-fb').checked; });
+  const addQ = (type, extra = {}) => {
+    const q = { id: newId('f', used), section: qs.length ? qs[qs.length - 1].section : '', label: '', hint: '', optional: false, type, ...extra };
+    if (type === 'multipla') q.options = [0, 1, 2].map(() => ({ id: newId('o', used), text: '' })), q.correct = '';
+    qs.push(q); drawQ();
+    const last = $('m-qlist').querySelectorAll('.q-card'); const c = last[last.length - 1];
+    if (c) { c.scrollIntoView({ block: 'nearest' }); const t = c.querySelector('textarea'); if (t) t.focus(); }
+  };
+  $('q-add-t').onclick = () => addQ('texto');
+  $('q-add-m').onclick = () => addQ('multipla');
+  $('q-imp-t').onclick = () => { $('q-imp').hidden = !$('q-imp').hidden; };
+  $('q-imp-go').onclick = () => {
+    const list = parseFields($('q-imp-text').value, []);
+    if (!list.length) return;
+    list.forEach((f) => qs.push({ ...f, id: newId('f', used) }));
+    $('q-imp-text').value = ''; $('q-imp').hidden = true; drawQ();
+  };
+  const ql = $('m-qlist');
+  ql.addEventListener('input', (e) => {
+    const t = e.target, i = Number(t.dataset.qi);
+    if (Number.isNaN(i) || !qs[i]) return;
+    if (t.dataset.k) qs[i][t.dataset.k] = t.type === 'checkbox' ? t.checked : t.value;
+    else if (t.dataset.oi !== undefined) qs[i].options[Number(t.dataset.oi)].text = t.value;
+  });
+  ql.addEventListener('change', (e) => {
+    const t = e.target, i = Number(t.dataset.qi);
+    if (t.dataset.corr && qs[i]) { qs[i].correct = t.dataset.corr; drawQ(); }
+    else if (t.dataset.k === 'optional' && qs[i]) qs[i].optional = t.checked;
+  });
+  ql.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    const i = Number(b.dataset.qi); const q = qs[i]; if (!q) return;
+    if (b.dataset.qdel) { if (!q.label.trim() || confirm('Excluir esta pergunta?')) { qs.splice(i, 1); drawQ(); } }
+    else if (b.dataset.qmv) { const j = i + Number(b.dataset.qmv); if (qs[j]) { [qs[i], qs[j]] = [qs[j], qs[i]]; drawQ(); } }
+    else if (b.dataset.oadd) { q.options.push({ id: newId('o', used), text: '' }); drawQ(); }
+    else if (b.dataset.odel !== undefined) { const [r] = q.options.splice(Number(b.dataset.odel), 1); if (q.correct === r.id) q.correct = ''; drawQ(); }
+    else if (b.dataset.nocorr) { q.correct = ''; drawQ(); }
+  });
+  drawQ();
+  const collectQs = () => {
+    const out = [];
+    for (let i = 0; i < qs.length; i++) {
+      const q = qs[i];
+      const label = q.label.trim();
+      if (!label) throw new Error(`A pergunta ${i + 1} está sem enunciado.`);
+      const f = { id: q.id, section: (q.section || '').trim(), label, hint: (q.hint || '').trim(), optional: !!q.optional, type: q.type };
+      if (q.type === 'multipla') {
+        f.options = q.options.map((o) => ({ id: o.id, text: o.text.trim() })).filter((o) => o.text);
+        if (f.options.length < 2) throw new Error(`A pergunta ${i + 1} precisa de pelo menos 2 alternativas preenchidas.`);
+        f.correct = f.options.some((o) => o.id === q.correct) ? q.correct : '';
+      }
+      out.push(f);
+    }
+    return out;
+  };
   $('m-kind').addEventListener('change', () => { $('m-act').hidden = $('m-kind').value !== 'atividade'; });
   $('m-cancel').onclick = closeModal;
 
@@ -292,7 +384,8 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
     data.body = isAct ? $('m-body').value.trim() : '';
     data.pdfUrl = isAct ? $('m-pdf').value.trim() : '';
     data.feedbackEnabled = isAct && $('m-fb').checked;
-    data.fields = data.feedbackEnabled ? parseFields($('m-fields-text').value, l && l.fields) : [];
+    try { data.fields = isAct ? collectQs() : []; }
+    catch (err) { flash($('m-msg'), err.message, 'err'); return; }
     if (data.pdfUrl && !safeUrl(data.pdfUrl)) { flash($('m-msg'), 'O link do PDF não parece válido.', 'err'); return; }
     if (data.linkUrl && !safeUrl(data.linkUrl)) { flash($('m-msg'), 'O link do material não parece válido.', 'err'); return; }
     try {
@@ -529,7 +622,8 @@ Senha provisória: ${pass}`)}</div>
    Correcoes: respostas das alunas e feedback da Cris
    ============================================================ */
 function renderSubs() {
-  const pend = S.subs.filter((x) => x.status !== 'corrigida');
+  const fbOn = (x) => { const ls = (S.lessons || []).find((q) => q.id === x.lessonId); return !ls || !!ls.feedbackEnabled; };
+  const pend = S.subs.filter((x) => x.status !== 'corrigida' && fbOn(x));
   $('tab-corr').textContent = pend.length ? `Correções (${pend.length})` : 'Correções';
   const list = (S.subFilter === 'pend' ? pend : S.subs.slice())
     .sort((a, b) => ((b.submittedAt && b.submittedAt.seconds) || 9e9) - ((a.submittedAt && a.submittedAt.seconds) || 9e9));
@@ -541,7 +635,7 @@ function renderSubs() {
   ul.innerHTML = list.map((x) => `
     <li class="a-item" style="grid-template-columns:1fr auto">
       <div><div class="t">${esc(x.studentName || 'Aluna')}
-        <span class="badge ${x.status === 'corrigida' ? 'on' : 'off'}">${x.status === 'corrigida' ? 'Corrigida' : 'Aguardando'}</span></div>
+        <span class="badge ${x.status === 'corrigida' ? 'on' : 'off'}">${x.status === 'corrigida' ? 'Corrigida' : (fbOn(x) ? 'Aguardando' : 'Sem correção')}</span></div>
         <div class="m">${esc(x.lessonTitle || '')} · enviada em ${esc(fmtStamp(x.submittedAt))}</div></div>
       <div class="acts"><button class="btn ${x.status === 'corrigida' ? 'btn-ghost' : 'btn-primary'} small" data-sub="${esc(x.id)}" type="button">${x.status === 'corrigida' ? 'Ver / editar' : 'Corrigir'}</button></div>
     </li>`).join('');
@@ -569,12 +663,21 @@ function subModal(x) {
   ((lesson && lesson.fields) || []).forEach((f) => { if (ans[f.id]) ordered.push({ id: f.id, ...ans[f.id] }); });
   ids.forEach((id) => { if (!ordered.find((o) => o.id === id)) ordered.push({ id, ...ans[id] }); });
 
+  const okBadge = (o, ls) => {
+    if (o.type !== 'multipla' || typeof o.ok !== 'boolean') return '';
+    if (o.ok) return ' <span class="ans-ok">Correta</span>';
+    const f = ((ls && ls.fields) || []).find((q) => q.id === o.id);
+    const right = f && f.correct && (f.options || []).find((q) => q.id === f.correct);
+    return ` <span class="ans-bad">Incorreta${right ? `. Certa: ${esc(right.text)}` : ''}</span>`;
+  };
+  const graded = ordered.filter((o) => o.type === 'multipla' && typeof o.ok === 'boolean');
+  const score = graded.length ? `<div class="score">Múltipla escolha: ${graded.filter((o) => o.ok).length} de ${graded.length} corretas</div>` : '';
   let lastSec = null;
   const items = ordered.map((o) => {
     const head = (o.section || '') !== lastSec ? (lastSec = o.section || '', o.section ? `<h4 class="fld-sec">${esc(o.section)}</h4>` : '') : '';
     return `${head}<div class="ans-item">
       <div class="ans-label">${esc(o.label)}</div>
-      <div class="ans-text">${o.text ? esc(o.text).replace(/\n/g, '<br>') : '<em>Sem resposta</em>'}</div>
+      <div class="ans-text">${o.text ? esc(o.text).replace(/\n/g, '<br>') : '<em>Sem resposta</em>'}${okBadge(o, lesson)}</div>
       <textarea class="item-fb" data-fbid="${esc(o.id)}" rows="2" placeholder="Feedback deste item (opcional)">${esc(fbs[o.id] || '')}</textarea>
     </div>`;
   }).join('');
@@ -583,7 +686,7 @@ function subModal(x) {
     <h3>${esc(x.studentName || 'Aluna')}</h3>
     <p class="sub">${esc(x.lessonTitle || '')} · enviada em ${esc(fmtStamp(x.submittedAt))}</p>
     <div class="sub-answer">
-      ${items || (x.text ? `<p style="white-space:pre-wrap;margin:0 0 10px">${esc(x.text)}</p>` : '<p class="m">Sem texto.</p>')}
+      ${score}${items || (x.text ? `<p style="white-space:pre-wrap;margin:0 0 10px">${esc(x.text)}</p>` : '<p class="m">Sem texto.</p>')}
       ${link ? `<p style="margin:10px 0 0"><a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link)}</a></p>` : ''}
     </div>
     <form id="fb-form" class="f" style="margin-top:14px">
