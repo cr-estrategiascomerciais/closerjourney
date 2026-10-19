@@ -293,3 +293,104 @@ export function genPassword(len = 10) {
   crypto.getRandomValues(arr);
   return Array.from(arr, (n) => chars[n % chars.length]).join('');
 }
+
+/* ---------- texto formatado simples (atividades) ----------
+   Suporta: linhas em branco separam paragrafos, "- " lista, "1. " lista numerada,
+   "## " subtitulo, **negrito** e links automaticos. Tudo escapado. */
+export function renderRich(text) {
+  const inline = (s) => esc(s)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  let html = '', para = [], list = null;
+  const flushPara = () => { if (para.length) { html += `<p>${para.map(inline).join('<br>')}</p>`; para = []; } };
+  const flushList = () => { if (list) { html += `<${list.t}>${list.items.map((i) => `<li>${inline(i)}</li>`).join('')}</${list.t}>`; list = null; } };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    let m;
+    if (!line.trim()) { flushPara(); flushList(); }
+    else if ((m = line.match(/^\s*##\s+(.*)$/))) { flushPara(); flushList(); html += `<h4>${inline(m[1])}</h4>`; }
+    else if ((m = line.match(/^\s*[-•]\s+(.*)$/))) { flushPara(); if (!list || list.t !== 'ul') { flushList(); list = { t: 'ul', items: [] }; } list.items.push(m[1]); }
+    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)$/))) { flushPara(); if (!list || list.t !== 'ol') { flushList(); list = { t: 'ol', items: [] }; } list.items.push(m[1]); }
+    else { flushList(); para.push(line); }
+  }
+  flushPara(); flushList();
+  return html;
+}
+
+/* arquivo do Google Drive (PDF, etc.): devolve { id, embed } ou null */
+export function parseDriveFile(raw) {
+  const input = String(raw || '').trim();
+  if (!input) return null;
+  let u;
+  try { u = new URL(/^https?:\/\//i.test(input) ? input : 'https://' + input); } catch { return null; }
+  if (!/(^|\.)drive\.google\.com$|(^|\.)docs\.google\.com$/.test(u.hostname)) return null;
+  const m = u.pathname.match(/\/file\/d\/([\w-]{10,})/);
+  const id = m ? m[1] : u.searchParams.get('id');
+  if (!id || !/^[\w-]{10,}$/.test(id)) return null;
+  return { id, embed: `https://drive.google.com/file/d/${id}/preview`, open: `https://drive.google.com/file/d/${id}/view` };
+}
+
+export function fmtStamp(ts) {
+  const d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+  if (!d) return 'agora';
+  const p = brParts(d);
+  return `${fmtDMY(p.date).slice(0, 5)} às ${fmtTime(d)}`;
+}
+
+/* ---------- campos de resposta (entregaveis) de uma atividade ----------
+   Texto da Cris -> lista de campos.
+     ## Descoberta            (cria uma secao)
+     Recuo Estrategico        (campo)
+     Abertura | dica curta    (campo com dica)
+     Autoridade (opcional)    (campo nao obrigatorio)
+   Reaproveita o id de campos que ja existiam (mesma secao + mesmo nome),
+   para nao perder respostas ja enviadas ao editar a lista. */
+export function parseFields(text, existing = []) {
+  const key = (sec, label) => `${sec}\u0000${label.toLowerCase()}`;
+  const old = new Map();
+  (existing || []).forEach((f) => old.set(key(f.section || '', f.label), f.id));
+  const used = new Set();
+  const newId = () => {
+    let id;
+    do { id = 'f' + Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 6); } while (used.has(id));
+    return id;
+  };
+  const out = [];
+  let section = '';
+  for (const raw of String(text || '').replace(/\r/g, '').split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const h = line.match(/^##\s*(.*)$/);
+    if (h) { section = h[1].trim(); continue; }
+    const [labelRaw, ...hintParts] = line.split('|');
+    const label = labelRaw.trim();
+    if (!label) continue;
+    const hint = hintParts.join('|').trim();
+    let id = old.get(key(section, label));
+    if (!id || used.has(id)) id = newId();
+    used.add(id);
+    out.push({ id, section, label, hint, optional: /\(opcional\)\s*$/i.test(label) });
+  }
+  return out;
+}
+
+export function fieldsToText(fields) {
+  let sec = null, out = [];
+  for (const f of fields || []) {
+    if ((f.section || '') !== sec) { sec = f.section || ''; if (sec) out.push(`## ${sec}`); }
+    out.push(f.hint ? `${f.label} | ${f.hint}` : f.label);
+  }
+  return out.join('\n');
+}
+
+/* agrupa campos consecutivos da mesma secao */
+export function groupFields(fields) {
+  const groups = [];
+  for (const f of fields || []) {
+    const name = f.section || '';
+    const last = groups[groups.length - 1];
+    if (last && last.section === name) last.items.push(f); else groups.push({ section: name, items: [f] });
+  }
+  return groups;
+}
