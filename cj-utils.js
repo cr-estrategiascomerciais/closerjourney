@@ -364,15 +364,37 @@ export function parseFields(text, existing = []) {
     const h = line.match(/^##\s*(.*)$/);
     if (h) { section = h[1].trim(); continue; }
     const [labelRaw, ...hintParts] = line.split('|');
-    const label = labelRaw.trim();
+    const optional = /\(opcional\)\s*$/i.test(labelRaw);
+    const label = labelRaw.replace(/\(opcional\)\s*$/i, '').trim();
     if (!label) continue;
     const hint = hintParts.join('|').trim();
     let id = old.get(key(section, label));
     if (!id || used.has(id)) id = newId();
     used.add(id);
-    out.push({ id, section, label, hint, optional: /\(opcional\)\s*$/i.test(label) });
+    out.push({ id, section, label, hint, optional, type: 'texto' });
   }
   return out;
+}
+
+/* ids curtos e aleatorios para perguntas e alternativas */
+export function newId(prefix = 'f', used = new Set()) {
+  let id;
+  do { id = prefix + Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 6); } while (used.has(id));
+  used.add(id);
+  return id;
+}
+
+/* copia limpa das perguntas: tipo padrao 'texto', alternativas so em multipla escolha */
+export function normalizeFields(fields) {
+  return (Array.isArray(fields) ? fields : []).map((f) => {
+    const multi = f && f.type === 'multipla';
+    const o = { id: f.id || newId('f'), section: f.section || '', label: f.label || '', hint: f.hint || '', optional: !!f.optional, type: multi ? 'multipla' : 'texto' };
+    if (multi) {
+      o.options = (Array.isArray(f.options) ? f.options : []).map((x) => ({ id: x.id || newId('o'), text: x.text || '' }));
+      o.correct = o.options.some((x) => x.id === f.correct) ? f.correct : '';
+    }
+    return o;
+  });
 }
 
 export function fieldsToText(fields) {
