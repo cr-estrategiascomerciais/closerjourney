@@ -17,7 +17,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {},
+  lessons: [], events: [], completed: {}, collapsed: {},
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -159,6 +159,7 @@ function setTab(which) {
   $('tab-cal').setAttribute('aria-selected', !trilha);
   $('p-trilha').hidden = !trilha;
   $('p-cal').hidden = trilha;
+  $('layout').classList.toggle('no-side', !trilha);
 }
 $('tab-trilha').addEventListener('click', () => setTab('trilha'));
 $('tab-cal').addEventListener('click', () => { setTab('cal'); renderCal(); });
@@ -177,9 +178,47 @@ function showHome() {
 function trail() { return computeTrail(state.lessons, state.completed); }
 
 function render() {
+  renderSide();
   if (state.openLesson) { renderLesson(); return; }
   renderTrail();
 }
+
+/* ---------- menu lateral (montado a partir dos modulos e aulas publicados) ---------- */
+function renderSide() {
+  const box = $('side-list');
+  if (!box) return;
+  const items = trail();
+  if (!items.length) {
+    box.innerHTML = '<p class="side-empty">Os módulos e aulas aparecem aqui conforme forem publicados.</p>';
+    return;
+  }
+  box.innerHTML = groupByModule(items).map((g) => {
+    const done = g.items.filter((i) => i.done).length;
+    const closed = !!state.collapsed[g.module];
+    return `<div class="side-mod${closed ? ' is-collapsed' : ''}">
+      <button type="button" class="side-mod-h" data-mod="${esc(g.module)}" aria-expanded="${!closed}">
+        <span class="nm">${esc(g.module)}</span><small>${done}/${g.items.length}</small><i class="chev"></i>
+      </button>
+      <ul>${g.items.map(sideItem).join('')}</ul></div>`;
+  }).join('');
+}
+
+function sideItem(l) {
+  const cls = [l.done ? 'done' : '', l.current ? 'current' : '', !l.unlocked ? 'locked' : '', state.openLesson === l.id ? 'active' : ''].join(' ');
+  const ico = l.done ? ICON.check : !l.unlocked ? ICON.lock : l.kind === 'atividade' ? ICON.task : ICON.play;
+  return `<li><button type="button" class="side-item ${cls}" ${l.unlocked ? `data-open="${esc(l.id)}"` : 'disabled aria-disabled="true"'}>
+    <span class="si">${ico}</span><span class="tt">${esc(l.title)}</span></button></li>`;
+}
+
+document.addEventListener('click', (e) => {
+  const m = e.target.closest('[data-mod]');
+  if (m) { state.collapsed[m.dataset.mod] = !state.collapsed[m.dataset.mod]; renderSide(); }
+});
+$('side-home').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); });
+$('side-toggle').addEventListener('click', () => {
+  const open = document.body.classList.toggle('side-open');
+  $('side-toggle').setAttribute('aria-expanded', open);
+});
 
 function renderTrail() {
   const items = trail();
@@ -196,8 +235,8 @@ function renderTrail() {
 
   const cur = items.find((i) => i.current);
   $('next-up').innerHTML = cur
-    ? `<div class="next-up"><div><small>Próxima parada</small><strong>${esc(cur.title)}</strong></div>
-       <button class="btn btn-primary small" data-open="${esc(cur.id)}" type="button">Continuar</button></div>`
+    ? `<div class="next-up"><div><small>${done === 0 ? 'Sua primeira parada' : 'Próxima parada'}</small><strong>${esc(cur.title)}</strong></div>
+       <button class="btn btn-primary small" data-open="${esc(cur.id)}" type="button">${done === 0 ? 'Comece aqui' : 'Continuar'}</button></div>`
     : `<div class="next-up"><div><small>Jornada</small><strong>Você finalizou todas as etapas liberadas até agora.</strong></div></div>`;
 
   box.innerHTML = groupByModule(items).map((g) => `
@@ -220,7 +259,7 @@ function stopRow(l) {
 
 document.addEventListener('click', (e) => {
   const o = e.target.closest('[data-open]');
-  if (o && !o.disabled) openLesson(o.dataset.open);
+  if (o && !o.disabled) { document.body.classList.remove('side-open'); openLesson(o.dataset.open); }
 });
 
 /* ============================================================
@@ -230,6 +269,7 @@ function openLesson(id) {
   const l = trail().find((x) => x.id === id);
   if (!l || !l.unlocked) { toast('Finalize a etapa anterior para liberar esta.'); return; }
   state.openLesson = id;
+  $('layout').classList.remove('no-side');
   $('s-home').hidden = true; $('s-lesson').hidden = false;
   window.scrollTo({ top: 0 });
   renderLesson();
@@ -254,6 +294,11 @@ function loadYT() {
 function mountVideo(box, v, title) {
   if (v.kind === 'vimeo') {
     box.innerHTML = `<iframe src="${esc(v.embed)}&title=0&byline=0&portrait=0" title="${esc(title)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+    return;
+  }
+  if (v.kind === 'drive') {
+    box.classList.add('is-drive');
+    box.innerHTML = `<iframe src="${esc(v.embed)}" title="${esc(title)}" allow="autoplay; fullscreen" allowfullscreen></iframe><div class="drive-shield" aria-hidden="true"></div>`;
     return;
   }
   box.innerHTML = `
