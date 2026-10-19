@@ -482,3 +482,62 @@ body.embarque .ticket-card, body.embarque .modal .box { color: var(--ink); }
 .ans-ok { background: #e3f3e7; color: #1f6a35; }
 .ans-bad { background: #fbe4e8; color: #a32142; }
 .score { font-weight: 600; color: var(--deep); background: #f7ecef; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; }
+
+/* ===== v7: exportar respostas em PDF ===== */
+.export-bar { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; background: rgba(228,220,214,.08); border: 1px solid rgba(228,220,214,.2); border-radius: 14px; padding: 14px 18px; margin: 0 0 18px; color: var(--cream); }
+.export-bar strong { display: block; font-family: 'Playfair Display', serif; font-weight: 500; font-size: 18px; }
+.export-bar small { display: block; opacity: .8; font-size: 13.5px; margin-top: 2px; }
+.export-bar .btn-ghost { color: var(--cream); border-color: rgba(228,220,214,.5); }
+#print-root { display: none; }
+@media print {
+  @page { margin: 16mm 15mm; }
+  body.printing { background: #fff !important; color: #1b1b1b !important; }
+  body.printing > *:not(#print-root) { display: none !important; }
+  body.printing #print-root { display: block; font-family: 'Jost', Arial, sans-serif; font-size: 11.5pt; line-height: 1.5; color: #1b1b1b; background: #fff; }
+  #print-root .pr-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 2px solid #4F0C22; padding-bottom: 10px; margin-bottom: 14px; }
+  #print-root .pr-head img { height: 34px; width: auto; }
+  #print-root .pr-h1 { font-family: 'Playfair Display', Georgia, serif; font-size: 20pt; color: #4F0C22; text-align: right; }
+  #print-root .pr-head .pr-meta { text-align: right; }
+  #print-root .pr-meta { font-size: 9.5pt; color: #6b5a60; }
+  #print-root .pr-act { margin: 0 0 22px; }
+  #print-root .pr-act + .pr-act { break-before: page; }
+  #print-root .pr-mod { font-size: 9pt; letter-spacing: .1em; text-transform: uppercase; color: #C72F51; }
+  #print-root .pr-title { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 17pt; color: #4F0C22; margin: 2px 0 2px; break-after: avoid; }
+  #print-root .pr-sec { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 13pt; color: #7A2340; text-transform: uppercase; letter-spacing: .06em; margin: 18px 0 4px; padding-bottom: 3px; border-bottom: 1px dashed #c9bcc1; break-after: avoid; }
+  #print-root .pr-item { margin: 10px 0; break-inside: avoid; }
+  #print-root .pr-q { font-weight: 600; color: #4F0C22; font-size: 10.5pt; }
+  #print-root .pr-a { margin-top: 2px; word-break: break-word; }
+  #print-root .pr-a em { color: #8a7a80; }
+  #print-root .pr-tag { display: inline-block; font-size: 9pt; font-weight: 600; border: 1px solid #c9bcc1; border-radius: 999px; padding: 0 8px; margin-left: 6px; color: #4F0C22; }
+  #print-root .pr-fb { margin-top: 6px; border-left: 3px solid #C72F51; background: #f7ecef; padding: 6px 10px; font-size: 10.5pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; break-inside: avoid; }
+}
+
+/* ===== v7: material de apoio ===== */
+.side-home small { background: rgba(228,220,214,.18); border-radius: 999px; padding: 1px 8px; font-size: 11px; margin-left: 6px; }
+.mat-h { font-family: 'Playfair Display', serif; font-weight: 500; font-size: 28px; margin: 0 0 4px; color: var(--cream); }
+.mat-mod { font-family: 'Playfair Display', serif; font-weight: 500; font-size: 20px; color: var(--cream); margin: 26px 0 10px; }
+.mat-topic { background: var(--paper); color: var(--ink); border-radius: 16px; padding: 18px 20px; margin-bottom: 14px; display: grid; gap: 14px; }
+.mat-topic header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.mat-topic h4 { margin: 0; font-family: 'Playfair Display', serif; font-weight: 500; font-size: 21px; color: var(--deep); }
+.mat-topic .link-btn { color: var(--rose); }
+.mat-sec { display: grid; gap: 6px; border-top: 1px dashed var(--line); padding-top: 12px; }
+.mat-lbl { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--mid); font-weight: 600; }
+.mat-lbl small { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ink-soft); margin-left: 6px; }
+.mat-note, .mat-a { line-height: 1.55; word-break: break-word; }
+.mat-sec .link-btn { justify-self: start; font-size: 13.5px; }
+.mat-sh { margin: 12px 0 2px; font-family: 'Playfair Display', serif; font-weight: 500; font-size: 16px; color: var(--mid); text-transform: uppercase; letter-spacing: .06em; }
+.mat-item { margin: 6px 0; }
+.mat-q { font-weight: 600; font-size: 14px; color: var(--deep); }
+.mat-a em { color: var(--ink-soft); }
+.mat-tag { display: inline-block; font-size: 12px; font-weight: 600; background: #f7ecef; color: var(--deep); border-radius: 999px; padding: 1px 9px; margin-left: 6px; }
+.mat-fb { margin-top: 6px; background: #f7ecef; border-left: 3px solid var(--rose); border-radius: 8px; padding: 8px 12px; font-size: 14.5px; }
+.notes-box textarea { width: 100%; min-height: 120px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font: inherit; color: var(--ink); background: #fff; }
+.notes-box textarea:focus { outline: 2px solid var(--rose); outline-offset: 1px; border-color: transparent; }
+.hint-line { margin: 0 0 10px; font-size: 14px; color: var(--ink-soft); }
+@media print {
+  #print-root .pr-modh { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 14pt; color: #C72F51; text-transform: uppercase; letter-spacing: .08em; margin: 22px 0 4px; break-after: avoid; }
+  #print-root .pr-topic { margin: 0 0 18px; }
+  #print-root .pr-lbl { font-size: 9pt; letter-spacing: .1em; text-transform: uppercase; color: #7A2340; font-weight: 600; margin: 10px 0 2px; break-after: avoid; }
+  #print-root .pr-note { white-space: normal; }
+  #print-root .pr-sh { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 12pt; color: #7A2340; text-transform: uppercase; letter-spacing: .06em; margin: 12px 0 2px; border-bottom: 1px dashed #c9bcc1; break-after: avoid; }
+}
