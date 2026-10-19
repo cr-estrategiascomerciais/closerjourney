@@ -99,6 +99,7 @@ document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () 
    ============================================================ */
 function renderLessons() {
   $('seed').hidden = S.lessons.length > 0;
+  renderSideAdmin();
   const box = $('lessons');
   if (!S.lessons.length) {
     box.innerHTML = '<div class="empty">Nenhuma aula ou atividade ainda. Clique em "Carregar trilha sugerida" para começar a partir do fluxograma da jornada, ou crie a primeira.</div>';
@@ -110,7 +111,7 @@ function renderLessons() {
     <ul class="a-list">${g.items.map((l) => {
       const i = idxOf(l.id);
       const hasVideo = !!parseVideo(l.videoUrl);
-      return `<li class="a-item ${l.published ? '' : 'draft'}">
+      return `<li class="a-item ${l.published ? '' : 'draft'}" id="li-${l.id}">
         <div class="move">
           <button class="icon-btn" data-up="${l.id}" ${i === 0 ? 'disabled' : ''} title="Subir" type="button">&uarr;</button>
           <button class="icon-btn" data-down="${l.id}" ${i === S.lessons.length - 1 ? 'disabled' : ''} title="Descer" type="button">&darr;</button>
@@ -127,6 +128,34 @@ function renderLessons() {
         </div></li>`;
     }).join('')}</ul>`).join('');
 }
+
+/* ---------- menu lateral: nasce dos modulos e aulas cadastrados ---------- */
+const collapsedMods = {};
+function renderSideAdmin() {
+  const box = $('a-side');
+  if (!S.lessons.length) { box.innerHTML = '<p class="side-empty">Os módulos e aulas que você criar aparecem aqui.</p>'; return; }
+  box.innerHTML = groupByModule(S.lessons).map((g) => {
+    const closed = !!collapsedMods[g.module];
+    return `<div class="side-mod${closed ? ' is-collapsed' : ''}">
+      <div class="side-mod-row">
+        <button type="button" class="side-mod-h" data-smod="${esc(g.module)}" aria-expanded="${!closed}">
+          <span class="nm">${esc(g.module)}</span><small>${g.items.length}</small><i class="chev"></i></button>
+        <button type="button" class="side-plus" data-addin="${esc(g.module)}" title="Nova aula neste módulo" aria-label="Nova aula neste módulo">+</button>
+      </div>
+      <ul>${g.items.map((l) => `<li><button type="button" class="side-item${l.published ? '' : ' draft'}" data-jump="${esc(l.id)}">
+        <span class="tt">${esc(l.title)}</span></button></li>`).join('')}</ul></div>`;
+  }).join('');
+}
+$('a-side').addEventListener('click', (e) => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.smod !== undefined) { collapsedMods[t.dataset.smod] = !collapsedMods[t.dataset.smod]; renderSideAdmin(); }
+  else if (t.dataset.addin !== undefined) lessonModal(null, 'aula', t.dataset.addin);
+  else if (t.dataset.jump) {
+    const el = document.getElementById('li-' + t.dataset.jump);
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); }
+  }
+});
+$('new-mod').onclick = () => lessonModal(null, 'aula', '', true);
 
 $('lessons').addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return;
@@ -171,24 +200,25 @@ $('seed').onclick = async () => {
   } catch (e) { toast(friendlyError(e)); }
 };
 
-function lessonModal(l, kindDefault) {
+function lessonModal(l, kindDefault, moduleDefault, newModule) {
   const isNew = !l;
   const kind = l ? l.kind : kindDefault;
   const mods = [...new Set(S.lessons.map((x) => x.module).filter(Boolean))];
+  const modVal = l ? l.module : (moduleDefault !== undefined ? moduleDefault : (mods[mods.length - 1] || ''));
   openModal(`
-    <h3>${isNew ? 'Nova' : 'Editar'} ${kind === 'atividade' ? 'atividade' : 'aula'}</h3>
-    <p class="sub">Para trocar o vídeo, é só colar o novo link e salvar.</p>
+    <h3>${newModule ? 'Novo módulo' : (isNew ? 'Nova' : 'Editar') + ' ' + (kind === 'atividade' ? 'atividade' : 'aula')}</h3>
+    <p class="sub">${newModule ? 'Digite o nome do módulo e cadastre a primeira aula dele. O módulo aparece no menu lateral.' : 'Para trocar o vídeo, é só colar o novo link e salvar.'}</p>
     <form id="l-form" class="f">
       <div class="row">
         <label>Tipo
           <select id="m-kind"><option value="aula" ${kind === 'aula' ? 'selected' : ''}>Aula</option><option value="atividade" ${kind === 'atividade' ? 'selected' : ''}>Atividade</option></select>
         </label>
-        <label>Módulo <input id="m-module" list="mods" required value="${esc(l ? l.module : (mods[mods.length - 1] || ''))}" placeholder="Ex.: Diário de Bordo">
+        <label>Módulo <input id="m-module" list="mods" required value="${esc(modVal)}" placeholder="Ex.: Diário de Bordo">
           <datalist id="mods">${mods.map((m) => `<option value="${esc(m)}">`).join('')}</datalist></label>
       </div>
       <label>Título <input id="m-title" required value="${esc(l ? l.title : '')}"></label>
       <label>Descrição <textarea id="m-desc">${esc(l ? l.description : '')}</textarea></label>
-      <label>Link do vídeo <span class="hint">YouTube (pode ser não listado) ou Vimeo</span>
+      <label>Link do vídeo <span class="hint">Google Drive, YouTube (pode ser não listado) ou Vimeo</span>
         <input id="m-video" value="${esc(l ? l.videoUrl : '')}" placeholder="https://youtu.be/..."></label>
       <div id="m-vcheck" class="msg" hidden></div>
       <label>Link do material ou da atividade <span class="hint">Notion, Google Docs, formulário... (opcional)</span>
@@ -205,10 +235,12 @@ function lessonModal(l, kindDefault) {
     const raw = $('m-video').value.trim(), el = $('m-vcheck');
     if (!raw) { el.hidden = true; return; }
     const v = parseVideo(raw);
-    if (v && v.embed) flash(el, `Vídeo reconhecido (${v.kind === 'youtube' ? 'YouTube' : 'Vimeo'}).`, 'ok');
-    else flash(el, 'Link não reconhecido como YouTube ou Vimeo. Na área da aluna ele abrirá como link externo.', 'warn');
+    if (v && v.kind === 'drive') flash(el, 'Vídeo do Google Drive reconhecido. Confirme que o arquivo está compartilhado como "Qualquer pessoa com o link", senão as alunas não conseguem assistir.', 'ok');
+    else if (v && v.embed) flash(el, `Vídeo reconhecido (${v.kind === 'youtube' ? 'YouTube' : 'Vimeo'}).`, 'ok');
+    else flash(el, 'Link não reconhecido como Google Drive, YouTube ou Vimeo. Na área da aluna ele abrirá como link externo.', 'warn');
   };
   $('m-video').addEventListener('input', vcheck); vcheck();
+  if (newModule) $('m-module').focus();
   $('m-cancel').onclick = closeModal;
 
   $('l-form').addEventListener('submit', async (e) => {
