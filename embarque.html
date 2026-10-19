@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=2">
+<link rel="stylesheet" href="area.css?v=3">
 </head>
 <body class="area embarque">
 
@@ -69,7 +69,17 @@
     </div>
   </header>
 
-  <main class="a-wrap">
+  <main class="a-wrap wide">
+    <div class="a-layout" id="layout">
+    <aside class="side" id="side" aria-label="Módulos e aulas">
+      <div class="side-card">
+        <div class="side-title">Sua jornada</div>
+        <button class="side-home" id="side-home" type="button">Visão geral</button>
+        <div id="side-list"></div>
+      </div>
+    </aside>
+    <div class="a-main">
+    <button class="side-toggle" id="side-toggle" type="button" aria-expanded="false">Módulos e aulas</button>
     <!-- lista -->
     <section id="s-home">
       <span class="eyebrow">Área de Embarque</span>
@@ -113,6 +123,8 @@
 
     <!-- aula -->
     <section id="s-lesson" hidden></section>
+      </div>
+    </div>
   </main>
 </div>
 
@@ -120,6 +132,6 @@
 <div class="modal" id="ev-modal" hidden><div class="box" id="ev-box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="embarque.js?v=2"></script>
+<script type="module" src="embarque.js?v=3"></script>
 </body>
 </html>
