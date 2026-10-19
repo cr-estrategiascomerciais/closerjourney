@@ -73,6 +73,14 @@ export function parseVideo(raw) {
     };
   }
 
+  if (host === 'drive.google.com' || host === 'docs.google.com') {
+    const dm = u.pathname.match(/\/file\/d\/([\w-]{10,})/);
+    const did = dm ? dm[1] : u.searchParams.get('id');
+    if (did && /^[\w-]{10,}$/.test(did)) {
+      return { kind: 'drive', id: did, url: u.href, embed: `https://drive.google.com/file/d/${did}/preview` };
+    }
+  }
+
   if (host === 'vimeo.com' || host === 'player.vimeo.com') {
     const m = u.pathname.match(/(\d{5,})(?:\/([\w]+))?/);
     if (m) {
