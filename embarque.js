@@ -3,13 +3,13 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
-  doc, getDoc, setDoc, updateDoc, collection, query, where, onSnapshot, serverTimestamp
+  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp
-} from './cj-utils.js?v=6';
+} from './cj-utils.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -17,7 +17,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -70,7 +70,7 @@ if (!configured) {
 function cleanup() {
   state.unsubs.forEach((u) => u());
   state.unsubs = [];
-  state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.editingSub = false;
+  state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.notes = {}; state.editingSub = false;
   state.openLesson = null;
   const sl = $('s-lesson'); sl.innerHTML = ''; sl.dataset.lessonId = ''; sl.dataset.mediaKey = ''; sl.dataset.infoKey = ''; sl.dataset.subKey = '';
 }
@@ -150,6 +150,13 @@ function startApp() {
     render();
   }, onErr));
 
+  state.unsubs.push(onSnapshot(query(collection(db, 'notes'), where('uid', '==', uid)), (snap) => {
+    const m = {};
+    snap.docs.forEach((d) => { const x = d.data(); m[x.lessonId] = x; });
+    state.notes = m;
+    render();
+  }, onErr));
+
   state.unsubs.push(onSnapshot(doc(db, 'progress', uid), (snap) => {
     state.completed = (snap.exists() && snap.data().completed) || {};
     render();
@@ -161,20 +168,23 @@ function startApp() {
 
 /* ---------- abas ---------- */
 function setTab(which) {
-  const trilha = which === 'trilha';
-  $('tab-trilha').setAttribute('aria-selected', trilha);
-  $('tab-cal').setAttribute('aria-selected', !trilha);
-  $('p-trilha').hidden = !trilha;
-  $('p-cal').hidden = trilha;
-  $('layout').classList.toggle('no-side', !trilha);
+  $('tab-trilha').setAttribute('aria-selected', which === 'trilha');
+  $('tab-cal').setAttribute('aria-selected', which === 'cal');
+  $('tab-mat').setAttribute('aria-selected', which === 'mat');
+  $('p-trilha').hidden = which !== 'trilha';
+  $('p-cal').hidden = which !== 'cal';
+  $('p-mat').hidden = which !== 'mat';
+  $('layout').classList.toggle('no-side', which === 'cal');
+  state.tab = which;
 }
 $('tab-trilha').addEventListener('click', () => setTab('trilha'));
 $('tab-cal').addEventListener('click', () => { setTab('cal'); renderCal(); });
+$('tab-mat').addEventListener('click', () => { setTab('mat'); renderMaterial(); });
 
 function showHome() {
   state.openLesson = null;
   const sl = $('s-lesson');
-  sl.hidden = true; sl.innerHTML = ''; sl.dataset.lessonId = ''; sl.dataset.mediaKey = ''; sl.dataset.infoKey = ''; sl.dataset.subKey = '';
+  sl.hidden = true; sl.innerHTML = ''; sl.dataset.lessonId = ''; sl.dataset.mediaKey = ''; sl.dataset.infoKey = ''; sl.dataset.subKey = ''; sl.dataset.noteLesson = '';
   $('s-home').hidden = false;
   render();
 }
@@ -186,8 +196,11 @@ function trail() { return computeTrail(state.lessons, state.completed); }
 
 function render() {
   renderSide();
+  const nm = Object.values(state.notes).filter((n) => n.note || (n.answers && n.answers.length)).length;
+  $('side-mat').innerHTML = `Material de apoio${nm ? ` <small>${nm}</small>` : ''}`;
   if (state.openLesson) { renderLesson(); return; }
   renderTrail();
+  renderMaterial();
 }
 
 /* ---------- menu lateral (montado a partir dos modulos e aulas publicados) ---------- */
@@ -222,6 +235,7 @@ document.addEventListener('click', (e) => {
   if (m) { state.collapsed[m.dataset.mod] = !state.collapsed[m.dataset.mod]; renderSide(); }
 });
 $('side-home').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); });
+$('side-mat').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('mat'); renderMaterial(); window.scrollTo(0, 0); });
 $('side-toggle').addEventListener('click', () => {
   const open = document.body.classList.toggle('side-open');
   $('side-toggle').setAttribute('aria-expanded', open);
@@ -232,7 +246,7 @@ function renderTrail() {
   const box = $('trail');
   if (!items.length) {
     box.innerHTML = '<div class="empty">As primeiras etapas da sua jornada ainda estão sendo preparadas. Volte em breve.</div>';
-    $('next-up').innerHTML = ''; $('pct').textContent = '0%'; $('bar').style.width = '0';
+    $('next-up').innerHTML = ''; $('pct').textContent = '0%'; $('bar').style.width = '0'; $('export-all').innerHTML = '';
     return;
   }
   const done = items.filter((i) => i.done).length;
@@ -245,6 +259,13 @@ function renderTrail() {
     ? `<div class="next-up"><div><small>${done === 0 ? 'Sua primeira parada' : 'Próxima parada'}</small><strong>${esc(cur.title)}</strong></div>
        <button class="btn btn-primary small" data-open="${esc(cur.id)}" type="button">${done === 0 ? 'Comece aqui' : 'Continuar'}</button></div>`
     : `<div class="next-up"><div><small>Jornada</small><strong>Você finalizou todas as etapas liberadas até agora.</strong></div></div>`;
+
+  const nSubs = items.filter((i) => i.kind === 'atividade' && state.subs[i.id]).length;
+  $('export-all').innerHTML = nSubs
+    ? `<div class="export-bar"><div><strong>Suas respostas</strong><small>${nSubs} atividade${nSubs > 1 ? 's' : ''} com resposta. Baixe em PDF para consultar como material de apoio.</small></div>
+       <button class="btn btn-ghost small" id="pdf-all" type="button">Baixar todas (PDF)</button></div>`
+    : '';
+  const pa = $('pdf-all'); if (pa) pa.onclick = () => printAnswers();
 
   box.innerHTML = groupByModule(items).map((g) => `
     <div class="module">
@@ -360,7 +381,7 @@ function renderLesson() {
 
   /* esqueleto fixo: player, PDF e formulario nao sao recriados quando algo atualiza */
   if (sec.dataset.lessonId !== l.id) {
-    sec.dataset.lessonId = l.id; sec.dataset.mediaKey = ''; sec.dataset.infoKey = ''; sec.dataset.subKey = '';
+    sec.dataset.lessonId = l.id; sec.dataset.mediaKey = ''; sec.dataset.infoKey = ''; sec.dataset.subKey = ''; sec.dataset.noteLesson = '';
     state.editingSub = false;
     sec.innerHTML = `
       <div class="lesson-head">
@@ -371,6 +392,7 @@ function renderLesson() {
       <div id="l-media"></div>
       <div id="l-info"></div>
       <div id="l-sub"></div>
+      <div id="l-notes"></div>
       <div id="l-actions"></div>`;
     $('back').onclick = showHome;
   }
@@ -411,6 +433,7 @@ function renderLesson() {
 
   /* ---- resposta + feedback (so em atividades com feedback) ---- */
   renderSub(l);
+  renderNotes(l);
 
   /* ---- acoes ---- */
   const next = items[idx + 1];
@@ -446,7 +469,7 @@ function renderSub(l) {
   if (l.kind !== 'atividade') { box.innerHTML = ''; sec.dataset.subKey = ''; return; }
   const sub = state.subs[l.id];
   const fields = Array.isArray(l.fields) ? l.fields : [];
-  const key = JSON.stringify([sub ? [sub.status, sub.text, sub.link, sub.answers, sub.feedback, sub.feedbacks, sub.submittedAt && sub.submittedAt.seconds, sub.feedbackAt && sub.feedbackAt.seconds] : null, state.editingSub, fields]);
+  const key = JSON.stringify([sub ? [sub.status, sub.text, sub.link, sub.answers, sub.feedback, sub.feedbacks, sub.submittedAt && sub.submittedAt.seconds, sub.feedbackAt && sub.feedbackAt.seconds] : null, state.editingSub, fields, (state.notes[l.id] && state.notes[l.id].answers ? [state.notes[l.id].answers.length, state.notes[l.id].answersAt && state.notes[l.id].answersAt.seconds] : null)]);
   if (sec.dataset.subKey === key) return;
   sec.dataset.subKey = key;
 
@@ -536,10 +559,15 @@ function renderSub(l) {
       </form>`;
   }
 
+  const afterBtns = `<div class="btn-row" style="margin-top:12px">
+      <button class="btn btn-ghost small" type="button" id="sub-edit">Editar e reenviar</button>
+      <button class="btn btn-primary small" type="button" id="sub-mat">${matAnswers(l) ? 'Atualizar no material de apoio' : 'Adicionar ao material de apoio'}</button>
+      <button class="btn btn-ghost small" type="button" id="sub-pdf">Baixar respostas (PDF)</button></div>
+      ${matStale(l, sub) ? '<p class="hint-inline" style="margin:8px 0 0">Você reenviou esta atividade depois de adicioná-la ao material. Clique em "Atualizar no material de apoio".</p>' : ''}`;
   box.innerHTML = `<div class="lesson-body sub-box">
     <h3 class="sub-h">${l.feedbackEnabled ? 'Sua resposta para a Cris' : 'Sua resposta'}</h3>
     ${status}${showForm ? '' : answer}${form}
-    ${showForm ? '' : '<div class="btn-row" style="margin-top:12px"><button class="btn btn-ghost small" type="button" id="sub-edit">Editar e reenviar</button></div>'}
+    ${showForm ? '' : afterBtns}
   </div>`;
 
   const f = $('sub-form');
@@ -554,7 +582,214 @@ function renderSub(l) {
   }
   const c = $('sub-cancel'); if (c) c.onclick = () => { state.editingSub = false; renderSub(l); };
   const ed = $('sub-edit'); if (ed) ed.onclick = () => { state.editingSub = true; renderSub(l); };
+  const pd = $('sub-pdf'); if (pd) pd.onclick = () => printAnswers(l.id);
+  const pm = $('sub-mat'); if (pm) pm.onclick = () => addAnswersToMaterial(l);
 }
+
+
+/* ============================================================
+   Material de apoio (anotacoes + respostas por aula) e PDF
+   ============================================================ */
+const nl2br = (t) => esc(t || '').replace(/\n/g, '<br>');
+const draftNoteKey = (id) => `cj-note:${state.user.uid}:${id}`;
+const noteRef = (lid) => doc(db, 'notes', `${lid}_${state.user.uid}`);
+const matAnswers = (l) => { const n = state.notes[l.id]; return !!(n && n.answers && n.answers.length); };
+const matStale = (l, sub) => {
+  const n = state.notes[l.id];
+  const a = n && n.answersAt && n.answersAt.seconds, b = sub && sub.submittedAt && sub.submittedAt.seconds;
+  return !!(a && b && b > a);
+};
+
+function answerRows(l, sub) {
+  const fields = Array.isArray(l.fields) ? l.fields : [];
+  const ans = sub.answers || {};
+  const fbs = sub.feedbacks || {};
+  const rows = [];
+  fields.forEach((f) => { if (ans[f.id]) rows.push({ id: f.id, f, ...ans[f.id] }); });
+  Object.keys(ans).forEach((id) => { if (!rows.find((r) => r.id === id)) rows.push({ id, f: null, ...ans[id] }); });
+  if (!rows.length && sub.text) rows.push({ id: 'txt', section: '', label: 'Resposta', text: sub.text });
+  const out = rows.map((r) => {
+    let tag = '';
+    if (r.type === 'multipla' && typeof r.ok === 'boolean') {
+      const right = r.f && r.f.correct && (r.f.options || []).find((o) => o.id === r.f.correct);
+      tag = r.ok ? 'Correta' : `Incorreta${right ? `. Certa: ${right.text}` : ''}`;
+    }
+    return { section: r.section || '', label: r.label || '', text: r.text || '', tag, fb: fbs[r.id] || '' };
+  });
+  const link = safeUrl(sub.link);
+  if (link) out.push({ section: '', label: 'Link anexado', text: link, tag: '', fb: '' });
+  if (sub.feedback) out.push({ section: '', label: 'Feedback geral da Cris', text: sub.feedback, tag: '', fb: '' });
+  return out.slice(0, 120);
+}
+
+/* linhas (pergunta/resposta) em HTML; cls = prefixo de classes (pr = pdf, mat = tela) */
+function rowsHtml(rows, cls) {
+  let lastSec = null;
+  return rows.map((r) => {
+    const head = (r.section || '') !== lastSec ? (lastSec = r.section || '', r.section ? `<h5 class="${cls}-sh">${esc(r.section)}</h5>` : '') : '';
+    return `${head}<div class="${cls}-item"><div class="${cls}-q">${esc(r.label)}</div>
+      <div class="${cls}-a">${r.text ? nl2br(r.text) : '<em>Sem resposta</em>'}${r.tag ? ` <span class="${cls}-tag">${esc(r.tag)}</span>` : ''}</div>
+      ${r.fb ? `<div class="${cls}-fb"><b>Feedback da Cris:</b> ${nl2br(r.fb)}</div>` : ''}</div>`;
+  }).join('');
+}
+
+/* abre a impressao do navegador (a aluna escolhe "Salvar como PDF") */
+function openPrint(innerHtml, title) {
+  let root = document.getElementById('print-root');
+  if (!root) { root = document.createElement('div'); root.id = 'print-root'; document.body.appendChild(root); }
+  const name = (state.profile && state.profile.name) || '';
+  root.innerHTML = `<header class="pr-head"><img src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
+      <div><div class="pr-h1">${esc(title)}</div><div class="pr-meta">${esc(name)}${name ? ' · ' : ''}gerado em ${new Date().toLocaleDateString('pt-BR')}</div></div></header>${innerHtml}`;
+  const oldTitle = document.title;
+  document.title = `${title}${name ? ' - ' + name : ''}`;
+  document.body.classList.add('printing');
+  let ended = false;
+  const done = () => { if (ended) return; ended = true; document.body.classList.remove('printing'); document.title = oldTitle; window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  const img = root.querySelector('img');
+  const go = () => { try { window.print(); } catch { done(); } };
+  if (img && !img.complete) { img.addEventListener('load', go, { once: true }); img.addEventListener('error', go, { once: true }); setTimeout(() => { if (!ended) go(); }, 1500); }
+  else setTimeout(go, 60);
+  setTimeout(done, 10 * 60 * 1000);
+}
+
+function printAnswers(onlyId) {
+  const list = state.lessons.filter((l) => l.kind === 'atividade' && state.subs[l.id] && (!onlyId || l.id === onlyId));
+  if (!list.length) { toast('Você ainda não enviou respostas.'); return; }
+  const acts = list.map((l) => {
+    const sub = state.subs[l.id];
+    return `<section class="pr-act"><div class="pr-mod">${esc(l.module || '')}</div>
+      <h2 class="pr-title">${esc(l.title)}</h2>
+      <div class="pr-meta">Enviada em ${esc(fmtStamp(sub.submittedAt))}</div>
+      ${rowsHtml(answerRows(l, sub), 'pr')}</section>`;
+  }).join('');
+  openPrint(acts, 'Minhas respostas');
+}
+
+/* topicos do material, na ordem da jornada */
+function topics() {
+  const order = new Map(state.lessons.map((l, i) => [l.id, i]));
+  return Object.values(state.notes)
+    .filter((n) => n.note || (n.answers && n.answers.length))
+    .sort((a, b) => (order.has(a.lessonId) ? order.get(a.lessonId) : 1e6) - (order.has(b.lessonId) ? order.get(b.lessonId) : 1e6));
+}
+
+function printMaterial() {
+  const list = topics();
+  if (!list.length) { toast('Seu material de apoio ainda está vazio.'); return; }
+  let lastMod = null;
+  const html = list.map((n) => {
+    const mod = n.module || '';
+    const head = mod !== lastMod ? (lastMod = mod, `<h3 class="pr-modh">${esc(mod)}</h3>`) : '';
+    return `${head}<section class="pr-topic"><h2 class="pr-title">${esc(n.lessonTitle || '')}</h2>
+      ${n.note ? `<div class="pr-lbl">Minhas anotações</div><div class="pr-a pr-note">${nl2br(n.note)}</div>` : ''}
+      ${n.answers && n.answers.length ? `<div class="pr-lbl">Minhas respostas</div>${rowsHtml(n.answers, 'pr')}` : ''}</section>`;
+  }).join('');
+  openPrint(html, 'Meu material de apoio');
+}
+
+async function writeTopic(lid, meta, patch) {
+  await setDoc(noteRef(lid), { uid: state.user.uid, lessonId: lid, ...meta, ...patch, updatedAt: serverTimestamp() }, { merge: true });
+}
+const metaOf = (l) => ({ lessonTitle: l.title || '', module: l.module || '' });
+
+async function clearPart(lid, part) {
+  const n = state.notes[lid];
+  if (!n) return;
+  const otherHas = part === 'note' ? !!(n.answers && n.answers.length) : !!n.note;
+  try {
+    if (!otherHas) await deleteDoc(noteRef(lid));
+    else await updateDoc(noteRef(lid), part === 'note' ? { note: '', noteAt: null, updatedAt: serverTimestamp() } : { answers: [], answersAt: null, updatedAt: serverTimestamp() });
+    toast('Removido do material de apoio.');
+  } catch (e) { toast(friendlyError(e)); }
+}
+
+async function addAnswersToMaterial(l) {
+  const sub = state.subs[l.id];
+  if (!sub) return;
+  const was = matAnswers(l);
+  const b = $('sub-mat'); if (b) b.disabled = true;
+  try {
+    await writeTopic(l.id, metaOf(l), { answers: answerRows(l, sub), answersAt: serverTimestamp() });
+    toast(was ? 'Material de apoio atualizado.' : 'Respostas adicionadas ao material de apoio.');
+  } catch (e) { toast(friendlyError(e)); if (b) b.disabled = false; }
+}
+
+/* anotacoes da aula/atividade */
+function renderNotes(l) {
+  const sec = $('s-lesson'), box = $('l-notes');
+  if (!box) return;
+  if (sec.dataset.noteLesson !== l.id) {
+    sec.dataset.noteLesson = l.id;
+    let draft = null; try { draft = localStorage.getItem(draftNoteKey(l.id)); } catch { /* ok */ }
+    const saved = (state.notes[l.id] && state.notes[l.id].note) || '';
+    box.innerHTML = `<div class="lesson-body notes-box">
+      <h3 class="sub-h">Minhas anotações</h3>
+      <p class="hint-line">Escreva o que quiser guardar desta ${l.kind === 'atividade' ? 'atividade' : 'aula'}. Só você vê. Ao salvar, o texto vai para o seu Material de apoio.</p>
+      <textarea id="n-text" rows="6" maxlength="20000" placeholder="Suas anotações...">${esc(draft != null ? draft : saved)}</textarea>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn btn-primary small" type="button" id="n-save"></button>
+        <button class="link-btn" type="button" id="n-rm" hidden>Remover anotações do material</button>
+        <span class="hint-inline" id="n-status"></span></div></div>`;
+    $('n-text').addEventListener('input', () => {
+      try { localStorage.setItem(draftNoteKey(l.id), $('n-text').value); } catch { /* ok */ }
+      renderNotes(l);
+    });
+    $('n-save').onclick = async () => {
+      const text = $('n-text').value.trim();
+      if (!text) { toast('Escreva algo antes de salvar.'); return; }
+      $('n-save').disabled = true;
+      try {
+        await writeTopic(l.id, metaOf(l), { note: text, noteAt: serverTimestamp() });
+        try { localStorage.removeItem(draftNoteKey(l.id)); } catch { /* ok */ }
+        toast('Anotações salvas no material de apoio.');
+      } catch (e) { toast(friendlyError(e)); }
+      $('n-save').disabled = false;
+    };
+    $('n-rm').onclick = () => { if (confirm('Remover as anotações desta aula do material de apoio?')) { clearPart(l.id, 'note'); $('n-text').value = ''; try { localStorage.removeItem(draftNoteKey(l.id)); } catch { /* ok */ } } };
+  }
+  /* so o estado dos botoes e atualizado, o texto digitado nunca e recriado */
+  const n = state.notes[l.id];
+  const saved = (n && n.note) || '';
+  const cur = $('n-text').value.trim();
+  const dirty = cur !== saved.trim();
+  $('n-save').textContent = saved ? 'Atualizar no material de apoio' : 'Salvar no material de apoio';
+  $('n-rm').hidden = !saved;
+  $('n-status').textContent = dirty ? (cur ? 'Alterações ainda não salvas no material.' : '') : (saved ? `No material${n.noteAt ? ' desde ' + fmtStamp(n.noteAt) : ''}.` : '');
+}
+
+/* tela do material de apoio */
+function renderMaterial() {
+  const box = $('mat-body');
+  if (!box) return;
+  const list = topics();
+  if (!list.length) {
+    box.innerHTML = `<div class="empty">Seu material de apoio está vazio. Em cada aula ou atividade você pode escrever suas anotações e, nas atividades, clicar em "Adicionar ao material de apoio" para guardar as suas respostas aqui.</div>`;
+    return;
+  }
+  let lastMod = null;
+  box.innerHTML = `<div class="export-bar"><div><strong>${list.length} tópico${list.length > 1 ? 's' : ''}</strong><small>Cada aula ou atividade é um tópico. Adicionar de novo atualiza o tópico.</small></div>
+      <button class="btn btn-primary small" id="mat-pdf" type="button">Baixar material (PDF)</button></div>` +
+    list.map((n) => {
+      const mod = n.module || '';
+      const head = mod !== lastMod ? (lastMod = mod, `<h3 class="mat-mod">${esc(mod)}</h3>`) : '';
+      const canOpen = state.lessons.some((l) => l.id === n.lessonId);
+      return `${head}<article class="mat-topic" data-lid="${esc(n.lessonId)}">
+        <header><h4>${esc(n.lessonTitle || '')}</h4>${canOpen ? `<button class="link-btn" type="button" data-open="${esc(n.lessonId)}">Abrir</button>` : ''}</header>
+        ${n.note ? `<div class="mat-sec"><div class="mat-lbl">Minhas anotações${n.noteAt ? ` <small>${esc(fmtStamp(n.noteAt))}</small>` : ''}</div>
+          <div class="mat-note">${nl2br(n.note)}</div>
+          <button class="link-btn" type="button" data-rm="note">Remover anotações</button></div>` : ''}
+        ${n.answers && n.answers.length ? `<div class="mat-sec"><div class="mat-lbl">Minhas respostas${n.answersAt ? ` <small>${esc(fmtStamp(n.answersAt))}</small>` : ''}</div>
+          ${rowsHtml(n.answers, 'mat')}
+          <button class="link-btn" type="button" data-rm="answers">Remover respostas</button></div>` : ''}
+      </article>`;
+    }).join('');
+}
+$('mat-body').addEventListener('click', (e) => {
+  if (e.target.closest('#mat-pdf')) { printMaterial(); return; }
+  const rm = e.target.closest('[data-rm]');
+  if (rm) { const art = rm.closest('[data-lid]'); if (art && confirm('Remover do material de apoio?')) clearPart(art.dataset.lid, rm.dataset.rm); }
+});
 
 async function submitAnswer(l) {
   const msg = $('sub-msg'), btn = $('sub-go');
