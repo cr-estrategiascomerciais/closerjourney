@@ -9,7 +9,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp
-} from './cj-utils.js?v=8';
+} from './cj-utils.js?v=9';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -562,8 +562,7 @@ function renderSub(l) {
   const afterBtns = `<div class="btn-row" style="margin-top:12px">
       <button class="btn btn-ghost small" type="button" id="sub-edit">Editar e reenviar</button>
       <button class="btn btn-primary small" type="button" id="sub-mat">${matAnswers(l) ? 'Atualizar no material de apoio' : 'Adicionar ao material de apoio'}</button>
-      <button class="btn btn-ghost small" type="button" id="sub-pdf">Baixar respostas (PDF)</button></div>
-      ${matStale(l, sub) ? '<p class="hint-inline" style="margin:8px 0 0">Você reenviou esta atividade depois de adicioná-la ao material. Clique em "Atualizar no material de apoio".</p>' : ''}`;
+      <button class="btn btn-ghost small" type="button" id="sub-pdf">Baixar respostas (PDF)</button></div>`;
   box.innerHTML = `<div class="lesson-body sub-box">
     <h3 class="sub-h">${l.feedbackEnabled ? 'Sua resposta para a Cris' : 'Sua resposta'}</h3>
     ${status}${showForm ? '' : answer}${form}
@@ -594,13 +593,9 @@ const nl2br = (t) => esc(t || '').replace(/\n/g, '<br>');
 const draftNoteKey = (id) => `cj-note:${state.user.uid}:${id}`;
 const noteRef = (lid) => doc(db, 'notes', `${lid}_${state.user.uid}`);
 const matAnswers = (l) => { const n = state.notes[l.id]; return !!(n && n.answers && n.answers.length); };
-const matStale = (l, sub) => {
-  const n = state.notes[l.id];
-  const a = n && n.answersAt && n.answersAt.seconds, b = sub && sub.submittedAt && sub.submittedAt.seconds;
-  return !!(a && b && b > a);
-};
 
-function answerRows(l, sub) {
+/* mine=true: so o que a aluna escreveu (sem feedback e sem correcao da Cris) */
+function answerRows(l, sub, mine = false) {
   const fields = Array.isArray(l.fields) ? l.fields : [];
   const ans = sub.answers || {};
   const fbs = sub.feedbacks || {};
@@ -610,26 +605,26 @@ function answerRows(l, sub) {
   if (!rows.length && sub.text) rows.push({ id: 'txt', section: '', label: 'Resposta', text: sub.text });
   const out = rows.map((r) => {
     let tag = '';
-    if (r.type === 'multipla' && typeof r.ok === 'boolean') {
+    if (!mine && r.type === 'multipla' && typeof r.ok === 'boolean') {
       const right = r.f && r.f.correct && (r.f.options || []).find((o) => o.id === r.f.correct);
       tag = r.ok ? 'Correta' : `Incorreta${right ? `. Certa: ${right.text}` : ''}`;
     }
-    return { section: r.section || '', label: r.label || '', text: r.text || '', tag, fb: fbs[r.id] || '' };
+    return { section: r.section || '', label: r.label || '', text: r.text || '', tag, fb: mine ? '' : (fbs[r.id] || '') };
   });
   const link = safeUrl(sub.link);
   if (link) out.push({ section: '', label: 'Link anexado', text: link, tag: '', fb: '' });
-  if (sub.feedback) out.push({ section: '', label: 'Feedback geral da Cris', text: sub.feedback, tag: '', fb: '' });
+  if (!mine && sub.feedback) out.push({ section: '', label: 'Feedback geral da Cris', text: sub.feedback, tag: '', fb: '' });
   return out.slice(0, 120);
 }
 
 /* linhas (pergunta/resposta) em HTML; cls = prefixo de classes (pr = pdf, mat = tela) */
-function rowsHtml(rows, cls) {
+function rowsHtml(rows, cls, plain = false) {
   let lastSec = null;
   return rows.map((r) => {
     const head = (r.section || '') !== lastSec ? (lastSec = r.section || '', r.section ? `<h5 class="${cls}-sh">${esc(r.section)}</h5>` : '') : '';
     return `${head}<div class="${cls}-item"><div class="${cls}-q">${esc(r.label)}</div>
-      <div class="${cls}-a">${r.text ? nl2br(r.text) : '<em>Sem resposta</em>'}${r.tag ? ` <span class="${cls}-tag">${esc(r.tag)}</span>` : ''}</div>
-      ${r.fb ? `<div class="${cls}-fb"><b>Feedback da Cris:</b> ${nl2br(r.fb)}</div>` : ''}</div>`;
+      <div class="${cls}-a">${r.text ? nl2br(r.text) : '<em>Sem resposta</em>'}${!plain && r.tag ? ` <span class="${cls}-tag">${esc(r.tag)}</span>` : ''}</div>
+      ${!plain && r.fb ? `<div class="${cls}-fb"><b>Feedback da Cris:</b> ${nl2br(r.fb)}</div>` : ''}</div>`;
   }).join('');
 }
 
@@ -683,7 +678,7 @@ function printMaterial() {
     const head = mod !== lastMod ? (lastMod = mod, `<h3 class="pr-modh">${esc(mod)}</h3>`) : '';
     return `${head}<section class="pr-topic"><h2 class="pr-title">${esc(n.lessonTitle || '')}</h2>
       ${n.note ? `<div class="pr-lbl">Minhas anotações</div><div class="pr-a pr-note">${nl2br(n.note)}</div>` : ''}
-      ${n.answers && n.answers.length ? `<div class="pr-lbl">Minhas respostas</div>${rowsHtml(n.answers, 'pr')}` : ''}</section>`;
+      ${n.answers && n.answers.length ? `<div class="pr-lbl">Minhas respostas</div>${rowsHtml(n.answers, 'pr', true)}` : ''}</section>`;
   }).join('');
   openPrint(html, 'Meu material de apoio');
 }
@@ -710,7 +705,7 @@ async function addAnswersToMaterial(l) {
   const was = matAnswers(l);
   const b = $('sub-mat'); if (b) b.disabled = true;
   try {
-    await writeTopic(l.id, metaOf(l), { answers: answerRows(l, sub), answersAt: serverTimestamp() });
+    await writeTopic(l.id, metaOf(l), { answers: answerRows(l, sub, true), answersAt: serverTimestamp() });
     toast(was ? 'Material de apoio atualizado.' : 'Respostas adicionadas ao material de apoio.');
   } catch (e) { toast(friendlyError(e)); if (b) b.disabled = false; }
 }
@@ -780,7 +775,7 @@ function renderMaterial() {
           <div class="mat-note">${nl2br(n.note)}</div>
           <button class="link-btn" type="button" data-rm="note">Remover anotações</button></div>` : ''}
         ${n.answers && n.answers.length ? `<div class="mat-sec"><div class="mat-lbl">Minhas respostas${n.answersAt ? ` <small>${esc(fmtStamp(n.answersAt))}</small>` : ''}</div>
-          ${rowsHtml(n.answers, 'mat')}
+          ${rowsHtml(n.answers, 'mat', true)}
           <button class="link-btn" type="button" data-rm="answers">Remover respostas</button></div>` : ''}
       </article>`;
     }).join('');
@@ -836,7 +831,13 @@ async function submitAnswer(l) {
     }
     clearDraft(l);
     state.editingSub = false;
-    toast('Resposta enviada para a Cris.');
+    /* se a atividade ja esta no material de apoio, o material acompanha a nova resposta */
+    let synced = false;
+    if (matAnswers(l)) {
+      try { await writeTopic(l.id, metaOf(l), { answers: answerRows(l, { answers: payload.answers, text: payload.text, link: payload.link }, true), answersAt: serverTimestamp() }); synced = true; }
+      catch (e2) { console.error(e2); }
+    }
+    toast(synced ? 'Resposta enviada e material de apoio atualizado.' : (l.feedbackEnabled ? 'Resposta enviada para a Cris.' : 'Resposta enviada.'));
   } catch (e) {
     console.error(e);
     fail(friendlyError(e)); btn.disabled = false;
