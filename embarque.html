@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=6">
+<link rel="stylesheet" href="area.css?v=8">
 </head>
 <body class="area embarque">
 
@@ -75,6 +75,7 @@
       <div class="side-card">
         <div class="side-title">Sua jornada</div>
         <button class="side-home" id="side-home" type="button">Visão geral</button>
+        <button class="side-home" id="side-mat" type="button">Material de apoio</button>
         <div id="side-list"></div>
       </div>
     </aside>
@@ -89,6 +90,7 @@
       <div class="tabs" role="tablist">
         <button class="tab" role="tab" id="tab-trilha" aria-selected="true">Minha jornada</button>
         <button class="tab" role="tab" id="tab-cal" aria-selected="false">Calendário de encontros</button>
+        <button class="tab" role="tab" id="tab-mat" aria-selected="false">Material de apoio</button>
       </div>
 
       <div id="p-trilha">
@@ -97,7 +99,14 @@
           <div class="bar"><i id="bar" style="width:0"></i></div>
         </div>
         <div id="next-up"></div>
+        <div id="export-all"></div>
         <div id="trail"></div>
+      </div>
+
+      <div id="p-mat" hidden>
+        <h2 class="mat-h">Meu material de apoio</h2>
+        <p class="a-sub" style="margin-top:0">Um espaço seu: anotações e respostas das atividades, organizadas por aula. Só você vê.</p>
+        <div id="mat-body"></div>
       </div>
 
       <div id="p-cal" hidden>
@@ -132,6 +141,6 @@
 <div class="modal" id="ev-modal" hidden><div class="box" id="ev-box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="embarque.js?v=6"></script>
+<script type="module" src="embarque.js?v=8"></script>
 </body>
 </html>
