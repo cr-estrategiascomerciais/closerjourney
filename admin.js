@@ -9,7 +9,7 @@ import {
   writeBatch, Timestamp, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
-  esc, safeUrl, parseVideo, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
+  esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, fieldsToText, groupFields, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword
 } from './cj-utils.js';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
@@ -18,7 +18,7 @@ const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
 const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
-const S = { lessons: [], events: [], students: [], unsubs: [], calYear: 0, calMonth: 0 };
+const S = { lessons: [], events: [], students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
 
 let toastTimer;
 function toast(msg) {
@@ -29,7 +29,7 @@ function flash(el, text, kind) { el.textContent = text; el.className = 'msg ' + 
 
 /* ---------- modal ---------- */
 function openModal(html) { $('box').innerHTML = html; $('modal').hidden = false; }
-function closeModal() { $('modal').hidden = true; $('box').innerHTML = ''; }
+function closeModal() { $('modal').hidden = true; $('box').innerHTML = ''; $('box').classList.remove('wide'); }
 $('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
@@ -78,6 +78,10 @@ function start() {
     S.events = snap.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, start: x.start.toDate() }; });
     renderCal(); updatePreview();
   }, onErr));
+  S.unsubs.push(onSnapshot(collection(db, 'submissions'), (snap) => {
+    S.subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderSubs();
+  }, onErr));
   S.unsubs.push(onSnapshot(collection(db, 'users'), (snap) => {
     S.students = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => u.role !== 'admin')
       .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
@@ -91,7 +95,7 @@ function start() {
 /* ---------- abas ---------- */
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['aulas', 'cal', 'alunas'].forEach((k) => ($('t-' + k).hidden = k !== t.dataset.tab));
+  ['aulas', 'cal', 'corr', 'alunas'].forEach((k) => ($('t-' + k).hidden = k !== t.dataset.tab));
 }));
 
 /* ============================================================
@@ -119,7 +123,7 @@ function renderLessons() {
         <div>
           <div class="t">${i + 1}. ${esc(l.title)}
             <span class="badge">${l.kind === 'atividade' ? 'Atividade' : 'Aula'}</span>
-            <span class="badge ${l.published ? 'on' : 'off'}">${l.published ? 'Publicada' : 'Rascunho'}</span></div>
+            <span class="badge ${l.published ? 'on' : 'off'}">${l.published ? 'Publicada' : 'Rascunho'}</span>${l.kind === 'atividade' && l.feedbackEnabled ? '<span class="badge fb">Com feedback</span>' : ''}</div>
           <div class="m">${l.kind === 'aula' ? (hasVideo ? 'Vídeo cadastrado' : 'Sem vídeo ainda') : (safeUrl(l.linkUrl) ? 'Link da atividade cadastrado' : 'Sem link ainda')}</div>
         </div>
         <div class="acts">
@@ -218,6 +222,19 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
       </div>
       <label>Título <input id="m-title" required value="${esc(l ? l.title : '')}"></label>
       <label>Descrição <textarea id="m-desc">${esc(l ? l.description : '')}</textarea></label>
+      <div id="m-act" class="sub-grid" ${kind === 'atividade' ? '' : 'hidden'}>
+        <label>Texto da atividade <span class="hint">Instruções, perguntas, exemplos. Linhas começando com "- " viram lista, "1. " lista numerada, "## " subtítulo e **texto** fica em negrito.</span>
+          <textarea id="m-body" rows="9">${esc(l ? l.body : '')}</textarea></label>
+        <label>PDF da atividade <span class="hint">Cole o link do PDF no Google Drive (compartilhado como "Qualquer pessoa com o link"). Ele aparece dentro da página da aluna.</span>
+          <input id="m-pdf" value="${esc(l ? l.pdfUrl : '')}" placeholder="https://drive.google.com/file/d/..."></label>
+        <div id="m-pdfcheck" class="msg" hidden></div>
+        <label class="check"><input type="checkbox" id="m-fb" ${l && l.feedbackEnabled ? 'checked' : ''}> Permitir feedback da Cris (a aluna envia a resposta e você corrige)</label>
+        <div id="m-fields" class="sub-grid" ${l && l.feedbackEnabled ? '' : 'hidden'}>
+          <label>Campos da resposta (entregáveis) <span class="hint">Opcional. Um campo por linha. "## Nome" cria uma seção, "Campo | dica" adiciona uma dica e "(opcional)" no fim do nome dispensa o preenchimento. Sem campos, a aluna responde em um texto livre.</span>
+            <textarea id="m-fields-text" rows="11" placeholder="## Descoberta&#10;Recuo Estratégico&#10;Perguntas de situação&#10;&#10;## Encantamento&#10;Abertura do encantamento&#10;Autoridade">${esc(l ? fieldsToText(l.fields) : '')}</textarea></label>
+          <div id="m-fcount" class="msg ok" hidden></div>
+        </div>
+      </div>
       <label>Link do vídeo <span class="hint">Google Drive, YouTube (pode ser não listado) ou Vimeo</span>
         <input id="m-video" value="${esc(l ? l.videoUrl : '')}" placeholder="https://youtu.be/..."></label>
       <div id="m-vcheck" class="msg" hidden></div>
@@ -241,6 +258,23 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
   };
   $('m-video').addEventListener('input', vcheck); vcheck();
   if (newModule) $('m-module').focus();
+  const pdfcheck = () => {
+    const raw = $('m-pdf').value.trim(), el = $('m-pdfcheck');
+    if (!raw) { el.hidden = true; return; }
+    if (parseDriveFile(raw)) flash(el, 'PDF do Google Drive reconhecido. Confirme o compartilhamento "Qualquer pessoa com o link".', 'ok');
+    else flash(el, 'Link fora do Google Drive: a aluna verá um botão "Abrir PDF" em vez do PDF dentro da página.', 'warn');
+  };
+  $('m-pdf').addEventListener('input', pdfcheck); pdfcheck();
+  const fcount = () => {
+    const f = parseFields($('m-fields-text').value, l && l.fields);
+    const el = $('m-fcount');
+    if (!f.length) { el.hidden = true; return; }
+    const secs = new Set(f.map((x) => x.section)).size;
+    flash(el, `${f.length} campo${f.length > 1 ? 's' : ''} em ${secs} seç${secs > 1 ? 'ões' : 'ão'}.`, 'ok');
+  };
+  $('m-fields-text').addEventListener('input', fcount); fcount();
+  $('m-fb').addEventListener('change', () => { $('m-fields').hidden = !$('m-fb').checked; });
+  $('m-kind').addEventListener('change', () => { $('m-act').hidden = $('m-kind').value !== 'atividade'; });
   $('m-cancel').onclick = closeModal;
 
   $('l-form').addEventListener('submit', async (e) => {
@@ -254,6 +288,12 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
       linkUrl: $('m-link').value.trim(),
       published: $('m-pub').checked
     };
+    const isAct = data.kind === 'atividade';
+    data.body = isAct ? $('m-body').value.trim() : '';
+    data.pdfUrl = isAct ? $('m-pdf').value.trim() : '';
+    data.feedbackEnabled = isAct && $('m-fb').checked;
+    data.fields = data.feedbackEnabled ? parseFields($('m-fields-text').value, l && l.fields) : [];
+    if (data.pdfUrl && !safeUrl(data.pdfUrl)) { flash($('m-msg'), 'O link do PDF não parece válido.', 'err'); return; }
     if (data.linkUrl && !safeUrl(data.linkUrl)) { flash($('m-msg'), 'O link do material não parece válido.', 'err'); return; }
     try {
       if (isNew) {
@@ -483,3 +523,89 @@ Senha provisória: ${pass}`)}</div>
     flash(msg, friendlyError(err), 'err');
   } finally { btn.disabled = false; }
 });
+
+
+/* ============================================================
+   Correcoes: respostas das alunas e feedback da Cris
+   ============================================================ */
+function renderSubs() {
+  const pend = S.subs.filter((x) => x.status !== 'corrigida');
+  $('tab-corr').textContent = pend.length ? `Correções (${pend.length})` : 'Correções';
+  const list = (S.subFilter === 'pend' ? pend : S.subs.slice())
+    .sort((a, b) => ((b.submittedAt && b.submittedAt.seconds) || 9e9) - ((a.submittedAt && a.submittedAt.seconds) || 9e9));
+  const ul = $('subs');
+  if (!list.length) {
+    ul.innerHTML = `<li class="empty">${S.subFilter === 'pend' ? 'Nenhuma resposta aguardando correção.' : 'Nenhuma resposta enviada ainda.'}</li>`;
+    return;
+  }
+  ul.innerHTML = list.map((x) => `
+    <li class="a-item" style="grid-template-columns:1fr auto">
+      <div><div class="t">${esc(x.studentName || 'Aluna')}
+        <span class="badge ${x.status === 'corrigida' ? 'on' : 'off'}">${x.status === 'corrigida' ? 'Corrigida' : 'Aguardando'}</span></div>
+        <div class="m">${esc(x.lessonTitle || '')} · enviada em ${esc(fmtStamp(x.submittedAt))}</div></div>
+      <div class="acts"><button class="btn ${x.status === 'corrigida' ? 'btn-ghost' : 'btn-primary'} small" data-sub="${esc(x.id)}" type="button">${x.status === 'corrigida' ? 'Ver / editar' : 'Corrigir'}</button></div>
+    </li>`).join('');
+}
+
+document.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => {
+  S.subFilter = b.dataset.filter;
+  document.querySelectorAll('[data-filter]').forEach((x) => x.classList.toggle('is-on', x === b));
+  renderSubs();
+}));
+$('subs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sub]');
+  if (b) subModal(S.subs.find((x) => x.id === b.dataset.sub));
+});
+
+function subModal(x) {
+  if (!x) return;
+  const link = safeUrl(x.link);
+  const ans = x.answers || {};
+  const ids = Object.keys(ans);
+  const fbs = x.feedbacks || {};
+  /* ordem dos campos: a da atividade, se existir; senao a ordem salva */
+  const lesson = S.lessons.find((l) => l.id === x.lessonId);
+  const ordered = [];
+  ((lesson && lesson.fields) || []).forEach((f) => { if (ans[f.id]) ordered.push({ id: f.id, ...ans[f.id] }); });
+  ids.forEach((id) => { if (!ordered.find((o) => o.id === id)) ordered.push({ id, ...ans[id] }); });
+
+  let lastSec = null;
+  const items = ordered.map((o) => {
+    const head = (o.section || '') !== lastSec ? (lastSec = o.section || '', o.section ? `<h4 class="fld-sec">${esc(o.section)}</h4>` : '') : '';
+    return `${head}<div class="ans-item">
+      <div class="ans-label">${esc(o.label)}</div>
+      <div class="ans-text">${o.text ? esc(o.text).replace(/\n/g, '<br>') : '<em>Sem resposta</em>'}</div>
+      <textarea class="item-fb" data-fbid="${esc(o.id)}" rows="2" placeholder="Feedback deste item (opcional)">${esc(fbs[o.id] || '')}</textarea>
+    </div>`;
+  }).join('');
+
+  openModal(`
+    <h3>${esc(x.studentName || 'Aluna')}</h3>
+    <p class="sub">${esc(x.lessonTitle || '')} · enviada em ${esc(fmtStamp(x.submittedAt))}</p>
+    <div class="sub-answer">
+      ${items || (x.text ? `<p style="white-space:pre-wrap;margin:0 0 10px">${esc(x.text)}</p>` : '<p class="m">Sem texto.</p>')}
+      ${link ? `<p style="margin:10px 0 0"><a href="${esc(link)}" target="_blank" rel="noopener noreferrer">${esc(link)}</a></p>` : ''}
+    </div>
+    <form id="fb-form" class="f" style="margin-top:14px">
+      <label>${items ? 'Feedback geral' : 'Seu feedback'}
+        <textarea id="fb-text" rows="${items ? 4 : 8}" placeholder="Escreva a correção e as orientações...">${esc(x.feedback || '')}</textarea></label>
+      <div id="fb-msg" class="msg err" hidden></div>
+      <div class="foot">
+        <button class="btn btn-ghost small" type="button" id="fb-cancel">Cancelar</button>
+        <button class="btn btn-primary small" type="submit">${x.status === 'corrigida' ? 'Atualizar feedback' : 'Enviar feedback'}</button>
+      </div>
+    </form>`);
+  $('box').classList.toggle('wide', !!items);
+  $('fb-cancel').onclick = closeModal;
+  $('fb-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const feedback = $('fb-text').value.trim();
+    const feedbacks = {};
+    document.querySelectorAll('[data-fbid]').forEach((t) => { const v = t.value.trim(); if (v) feedbacks[t.dataset.fbid] = v; });
+    if (!feedback && !Object.keys(feedbacks).length) { flash($('fb-msg'), 'Escreva o feedback geral ou o de algum item antes de enviar.', 'err'); return; }
+    try {
+      await updateDoc(doc(db, 'submissions', x.id), { feedback, feedbacks, status: 'corrigida', feedbackAt: serverTimestamp() });
+      closeModal(); toast('Feedback enviado para a aluna.');
+    } catch (err) { flash($('fb-msg'), friendlyError(err), 'err'); }
+  });
+}
