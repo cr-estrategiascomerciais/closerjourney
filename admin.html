@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=3">
+<link rel="stylesheet" href="area.css?v=5">
 </head>
 <body class="area embarque">
 
@@ -67,6 +67,7 @@
     <div class="tabs" role="tablist">
       <button class="tab" role="tab" data-tab="aulas" aria-selected="true">Aulas e atividades</button>
       <button class="tab" role="tab" data-tab="cal" aria-selected="false">Calendário</button>
+      <button class="tab" role="tab" data-tab="corr" aria-selected="false" id="tab-corr">Correções</button>
       <button class="tab" role="tab" data-tab="alunas" aria-selected="false">Alunas</button>
     </div>
 
@@ -166,6 +167,17 @@
       </div>
     </section>
 
+    <!-- CORRECOES -->
+    <section id="t-corr" hidden>
+      <div class="toolbar">
+        <div class="seg" role="tablist" aria-label="Filtro">
+          <button type="button" class="seg-b is-on" data-filter="pend">Pendentes</button>
+          <button type="button" class="seg-b" data-filter="all">Todas</button>
+        </div>
+      </div>
+      <ul class="a-list" id="subs"></ul>
+    </section>
+
     <!-- ALUNAS -->
     <section id="t-alunas" hidden>
       <div class="panel">
@@ -196,6 +208,6 @@
 <div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="admin.js?v=3"></script>
+<script type="module" src="admin.js?v=5"></script>
 </body>
 </html>
