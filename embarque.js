@@ -9,7 +9,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp
-} from './cj-utils.js?v=5';
+} from './cj-utils.js?v=6';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -415,7 +415,7 @@ function renderLesson() {
   /* ---- acoes ---- */
   const next = items[idx + 1];
   const unmarkable = l.done && canUnmark(items, l.id);
-  const needsAnswer = l.kind === 'atividade' && l.feedbackEnabled && !state.subs[l.id];
+  const needsAnswer = l.kind === 'atividade' && !state.subs[l.id];
   $('l-actions').innerHTML = `
     <div class="lesson-body lesson-actions-box">
       <div class="lesson-actions">
@@ -423,7 +423,7 @@ function renderLesson() {
           ? `<span class="done-pill">${ICON.check.replace('<svg', '<svg width="20" height="20"')} Etapa finalizada</span>
              ${unmarkable ? '<button class="link-btn" id="unmark" type="button">Desmarcar</button>' : ''}`
           : `<button class="btn btn-primary" id="mark" type="button" ${needsAnswer ? 'disabled' : ''}>Marcar como finalizada</button>
-             ${needsAnswer ? '<span class="hint-inline">Envie sua resposta para a Cris para poder finalizar.</span>' : ''}`}
+             ${needsAnswer ? '<span class="hint-inline">Envie sua resposta para poder finalizar.</span>' : ''}`}
         ${l.done && next ? `<button class="btn ${next.unlocked ? 'btn-primary' : 'btn-ghost'}" id="go-next" type="button" ${next.unlocked ? '' : 'disabled'}>Próxima etapa</button>` : ''}
       </div>
     </div>`;
@@ -443,10 +443,10 @@ function clearDraft(l) { try { localStorage.removeItem(draftKey(l)); } catch { /
 function renderSub(l) {
   const box = $('l-sub');
   const sec = $('s-lesson');
-  if (!(l.kind === 'atividade' && l.feedbackEnabled)) { box.innerHTML = ''; sec.dataset.subKey = ''; return; }
+  if (l.kind !== 'atividade') { box.innerHTML = ''; sec.dataset.subKey = ''; return; }
   const sub = state.subs[l.id];
   const fields = Array.isArray(l.fields) ? l.fields : [];
-  const key = JSON.stringify([sub ? [sub.status, sub.text, sub.link, sub.answers, sub.feedback, sub.feedbacks, sub.submittedAt && sub.submittedAt.seconds, sub.feedbackAt && sub.feedbackAt.seconds] : null, state.editingSub, fields.map((f) => f.id + f.label)]);
+  const key = JSON.stringify([sub ? [sub.status, sub.text, sub.link, sub.answers, sub.feedback, sub.feedbacks, sub.submittedAt && sub.submittedAt.seconds, sub.feedbackAt && sub.feedbackAt.seconds] : null, state.editingSub, fields]);
   if (sec.dataset.subKey === key) return;
   sec.dataset.subKey = key;
 
@@ -455,6 +455,13 @@ function renderSub(l) {
   const fbs = (sub && sub.feedbacks) || {};
   const nl = (t) => esc(t || '').replace(/\n/g, '<br>');
 
+  const okBadge = (o) => {
+    if (o.type !== 'multipla' || typeof o.ok !== 'boolean') return '';
+    if (o.ok) return ' <span class="ans-ok">Correta</span>';
+    const f = fields.find((q) => q.id === o.id);
+    const right = f && f.correct && (f.options || []).find((q) => q.id === f.correct);
+    return ` <span class="ans-bad">Incorreta${right ? `. Certa: ${esc(right.text)}` : ''}</span>`;
+  };
   /* resposta ja enviada (somente leitura), com o feedback de cada item */
   let answer = '';
   if (sub) {
@@ -468,11 +475,14 @@ function renderSub(l) {
       body = ordered.map((o) => {
         const head = (o.section || '') !== lastSec ? (lastSec = o.section || '', o.section ? `<h4 class="fld-sec">${esc(o.section)}</h4>` : '') : '';
         return `${head}<div class="ans-item"><div class="ans-label">${esc(o.label)}</div>
-          <div class="ans-text">${o.text ? nl(o.text) : '<em>Sem resposta</em>'}</div>
+          <div class="ans-text">${o.text ? nl(o.text) : '<em>Sem resposta</em>'}${okBadge(o)}</div>
           ${fbs[o.id] ? `<div class="fb-item"><b>Feedback da Cris</b><br>${nl(fbs[o.id])}</div>` : ''}</div>`;
       }).join('');
     } else if (sub.text) body = `<div class="ans-text">${nl(sub.text)}</div>`;
+    const graded = Object.values(sub.answers || {}).filter((o) => o.type === 'multipla' && typeof o.ok === 'boolean');
+    const score = graded.length ? `<div class="score">Múltipla escolha: você acertou ${graded.filter((o) => o.ok).length} de ${graded.length}</div>` : '';
     answer = `<div class="sub-answer">
+      ${score}
       <div class="sub-meta">Sua resposta, enviada em ${esc(fmtStamp(sub.submittedAt))}</div>
       ${body}
       ${sentLink ? `<p style="margin:10px 0 0"><a href="${esc(sentLink)}" target="_blank" rel="noopener noreferrer">${esc(sentLink)}</a></p>` : ''}
@@ -484,7 +494,7 @@ function renderSub(l) {
     status = `<div class="feedback-card"><div class="fb-title">Feedback da Cris <small>${esc(fmtStamp(sub.feedbackAt))}</small></div>
       ${sub.feedback ? `<div class="rich"><p>${nl(sub.feedback)}</p></div>` : '<div class="rich"><p>Veja os comentários em cada item abaixo.</p></div>'}</div>`;
   } else if (sub) {
-    status = '<div class="msg warn">Resposta enviada. A Cris vai corrigir e o feedback aparece aqui.</div>';
+    status = l.feedbackEnabled ? '<div class="msg warn">Resposta enviada. A Cris vai corrigir e o feedback aparece aqui.</div>' : '<div class="msg ok">Resposta enviada.</div>';
   }
 
   /* formulario */
@@ -497,9 +507,16 @@ function renderSub(l) {
       let lastSec = null;
       fieldsHtml = fields.map((f) => {
         const head = (f.section || '') !== lastSec ? (lastSec = f.section || '', f.section ? `<h4 class="fld-sec">${esc(f.section)}</h4>` : '') : '';
-        const val = (draft.a && draft.a[f.id] != null) ? draft.a[f.id] : (prev[f.id] ? prev[f.id].text : '');
+        const val = (draft.a && draft.a[f.id] != null) ? draft.a[f.id] : (prev[f.id] ? (f.type === 'multipla' ? prev[f.id].choice : prev[f.id].text) : '');
+        if (f.type === 'multipla') {
+          return `${head}<fieldset class="fld q-fs">
+            <legend class="fld-l">${esc(f.label)}${f.optional ? ' (opcional)' : ' <i class="req">*</i>'}</legend>
+            ${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ''}
+            ${(f.options || []).map((o) => `<label class="opt"><input type="radio" name="q-${esc(f.id)}" data-fid="${esc(f.id)}" value="${esc(o.id)}" ${val === o.id ? 'checked' : ''}><span>${esc(o.text)}</span></label>`).join('')}
+          </fieldset>`;
+        }
         return `${head}<label class="fld">
-          <span class="fld-l">${esc(f.label)}${f.optional ? '' : ' <i class="req">*</i>'}</span>
+          <span class="fld-l">${esc(f.label)}${f.optional ? ' (opcional)' : ' <i class="req">*</i>'}</span>
           ${f.hint ? `<span class="hint">${esc(f.hint)}</span>` : ''}
           <textarea data-fid="${esc(f.id)}" rows="4" maxlength="5000">${esc(val)}</textarea></label>`;
       }).join('');
@@ -513,14 +530,14 @@ function renderSub(l) {
           <input id="sub-link" type="url" placeholder="https://" value="${esc(draft.k != null ? draft.k : (sub ? sub.link : ''))}"></label>
         <div id="sub-msg" class="msg err" hidden></div>
         <div class="btn-row">
-          <button class="btn btn-primary small" type="submit" id="sub-go">${sub ? 'Reenviar resposta' : 'Enviar para a Cris'}</button>
+          <button class="btn btn-primary small" type="submit" id="sub-go">${sub ? 'Reenviar resposta' : (l.feedbackEnabled ? 'Enviar para a Cris' : 'Enviar resposta')}</button>
           ${sub ? '<button class="link-btn" type="button" id="sub-cancel">Cancelar</button>' : ''}
         </div>
       </form>`;
   }
 
   box.innerHTML = `<div class="lesson-body sub-box">
-    <h3 class="sub-h">Sua resposta para a Cris</h3>
+    <h3 class="sub-h">${l.feedbackEnabled ? 'Sua resposta para a Cris' : 'Sua resposta'}</h3>
     ${status}${showForm ? '' : answer}${form}
     ${showForm ? '' : '<div class="btn-row" style="margin-top:12px"><button class="btn btn-ghost small" type="button" id="sub-edit">Editar e reenviar</button></div>'}
   </div>`;
@@ -530,7 +547,7 @@ function renderSub(l) {
     f.addEventListener('submit', (e) => { e.preventDefault(); submitAnswer(l); });
     f.addEventListener('input', () => {
       const d = { k: $('sub-link').value };
-      if (fields.length) { d.a = {}; f.querySelectorAll('[data-fid]').forEach((t) => { d.a[t.dataset.fid] = t.value; }); }
+      if (fields.length) { d.a = {}; f.querySelectorAll('[data-fid]').forEach((t) => { if (t.type === 'radio') { if (t.checked) d.a[t.dataset.fid] = t.value; } else d.a[t.dataset.fid] = t.value; }); }
       else d.t = $('sub-text').value;
       if (!sub) saveDraft(l, d);
     });
@@ -551,7 +568,15 @@ async function submitAnswer(l) {
   if (fields.length) {
     const answers = {}, missing = [];
     fields.forEach((f) => {
-      const t = ($('sub-form').querySelector(`[data-fid="${f.id}"]`).value || '').trim();
+      if (f.type === 'multipla') {
+        const sel = $('sub-form').querySelector(`input[data-fid="${f.id}"]:checked`);
+        const opt = sel && (f.options || []).find((o) => o.id === sel.value);
+        answers[f.id] = { section: f.section || '', label: f.label, text: opt ? opt.text : '', type: 'multipla', choice: opt ? opt.id : '' };
+        if (opt && f.correct) answers[f.id].ok = opt.id === f.correct;
+        if (!opt && !f.optional) missing.push(f.label);
+        return;
+      }
+      const t = ($('sub-form').querySelector(`textarea[data-fid="${f.id}"]`).value || '').trim();
       answers[f.id] = { section: f.section || '', label: f.label, text: t };
       if (!t && !f.optional) missing.push(f.label);
     });
