@@ -11,14 +11,14 @@ import {
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword
-} from './cj-utils.js?v=9';
+} from './cj-utils.js?v=10';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
 const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
-const S = { lessons: [], events: [], students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
+const S = { lessons: [], events: [], signups: [], evOpen: null, students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
 
 let toastTimer;
 function toast(msg) {
@@ -77,6 +77,10 @@ function start() {
   S.unsubs.push(onSnapshot(collection(db, 'events'), (snap) => {
     S.events = snap.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, start: x.start.toDate() }; });
     renderCal(); updatePreview();
+  }, onErr));
+  S.unsubs.push(onSnapshot(collection(db, 'signups'), (snap) => {
+    S.signups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderEvSignups();
   }, onErr));
   S.unsubs.push(onSnapshot(collection(db, 'submissions'), (snap) => {
     S.subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -463,6 +467,25 @@ $('cal').addEventListener('click', (e) => {
 });
 $('one-ev').onclick = () => eventModal(null);
 
+const RP_LABEL = { closer: 'Closer', cliente: 'Cliente', observadora: 'Observadora' };
+function renderEvSignups() {
+  const box = document.getElementById('e-signups');
+  if (!box || !S.evOpen) return;
+  const list = S.signups.filter((x) => x.eventId === S.evOpen);
+  const row = (role) => {
+    const items = list.filter((x) => x.role === role);
+    if (!items.length) return `<div class="rp-row"><b>${RP_LABEL[role]}</b><span class="rp-empty">${role === 'observadora' ? 'Nenhuma inscrita' : 'Vaga livre'}</span></div>`;
+    return `<div class="rp-row"><b>${RP_LABEL[role]}</b><span>${items.map((x) => `${esc(x.name || 'Aluna')} <button class="link-btn" type="button" data-rmsign="${esc(x.id)}" title="Remover inscrição">remover</button>`).join(' · ')}</span></div>`;
+  };
+  box.innerHTML = `<div class="rp-h">Inscrições no roleplay</div>${row('closer')}${row('cliente')}${row('observadora')}`;
+  box.querySelectorAll('[data-rmsign]').forEach((b) => {
+    b.onclick = async () => {
+      if (!confirm('Remover esta inscrição?')) return;
+      try { await deleteDoc(doc(db, 'signups', b.dataset.rmsign)); } catch (err) { toast(friendlyError(err)); }
+    };
+  });
+}
+
 function eventModal(ev) {
   const isNew = !ev;
   const p = ev ? brParts(ev.start) : { date: todayKey(), time: '14:00' };
@@ -485,6 +508,7 @@ function eventModal(ev) {
       <label>Observações <textarea id="e-notes">${esc(ev ? ev.notes : '')}</textarea></label>
       ${seriesCount > 1 ? `
       <label class="check"><input type="checkbox" id="e-future"> Aplicar este horário também aos próximos encontros da mesma série (mantém as datas deles)</label>` : ''}
+      ${!isNew && ev.type === 'roleplay' ? '<div id="e-signups" class="rp-box"></div>' : ''}
       <div id="e-msg" class="msg err" hidden></div>
       <div class="foot">
         <div class="btn-row">
@@ -498,6 +522,8 @@ function eventModal(ev) {
       </div>
     </form>`);
   $('e-cancel').onclick = closeModal;
+  S.evOpen = isNew ? null : ev.id;
+  renderEvSignups();
 
   $('e-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -532,7 +558,11 @@ function eventModal(ev) {
   if (!isNew) {
     $('e-del').onclick = async () => {
       if (!confirm('Excluir este encontro?')) return;
-      try { await deleteDoc(doc(db, 'events', ev.id)); closeModal(); toast('Encontro excluído.'); }
+      try {
+        const b = writeBatch(db); b.delete(doc(db, 'events', ev.id));
+        S.signups.filter((x) => x.eventId === ev.id).forEach((x) => b.delete(doc(db, 'signups', x.id)));
+        await b.commit(); closeModal(); toast('Encontro excluído.');
+      }
       catch (err) { flash($('e-msg'), friendlyError(err), 'err'); }
     };
     const df = $('e-delf');
@@ -540,7 +570,9 @@ function eventModal(ev) {
       const list = S.events.filter((x) => x.seriesId === ev.seriesId && x.start >= ev.start);
       if (!confirm(`Excluir ${list.length} encontros (este e os próximos da série)?`)) return;
       try {
+        const ids = new Set(list.map((x) => x.id));
         const b = writeBatch(db); list.forEach((x) => b.delete(doc(db, 'events', x.id)));
+        S.signups.filter((x) => ids.has(x.eventId)).forEach((x) => b.delete(doc(db, 'signups', x.id)));
         await b.commit(); closeModal(); toast('Encontros excluídos.');
       } catch (err) { flash($('e-msg'), friendlyError(err), 'err'); }
     };
