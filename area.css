@@ -541,3 +541,25 @@ body.embarque .ticket-card, body.embarque .modal .box { color: var(--ink); }
   #print-root .pr-note { white-space: normal; }
   #print-root .pr-sh { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 12pt; color: #7A2340; text-transform: uppercase; letter-spacing: .06em; margin: 12px 0 2px; border-bottom: 1px dashed #c9bcc1; break-after: avoid; }
 }
+
+/* ===== v9: inscricao no roleplay ===== */
+.rp-box { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 14px 0; background: #fff; display: grid; gap: 10px; }
+.rp-h { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--deep); }
+.rp-sub { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.rp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.rp-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 4px; align-content: start; background: var(--paper); }
+.rp-card b { color: var(--deep); font-size: 15px; }
+.rp-card small { color: var(--ink-soft); font-size: 12.5px; }
+.rp-card .btn { margin-top: 6px; width: 100%; padding-left: 8px; padding-right: 8px; }
+.rp-card.is-mine { border-color: var(--rose); background: #fbeff2; }
+.rp-card.is-taken { opacity: .8; }
+.rp-me { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--rose); }
+.rp-taken { margin-top: 6px; font-size: 13px; color: var(--ink-soft); }
+.rp-mine { font-size: 14.5px; color: var(--ink); }
+.rp-mine .link-btn { color: var(--rose); margin-left: 6px; }
+.rp-chip { background: #fbeff2; color: var(--deep); border-radius: 999px; padding: 1px 8px; font-size: 12px; font-weight: 600; }
+.rp-row { display: grid; grid-template-columns: 110px 1fr; gap: 8px; font-size: 14.5px; align-items: baseline; }
+.rp-row b { color: var(--deep); }
+.rp-empty { color: var(--ink-soft); }
+.rp-row .link-btn { color: var(--rose); font-size: 13px; }
+@media (max-width: 640px) { .rp-grid { grid-template-columns: 1fr; } }
