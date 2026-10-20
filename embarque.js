@@ -3,13 +3,13 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, where, onSnapshot, serverTimestamp
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, where, onSnapshot, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp
-} from './cj-utils.js?v=10';
+} from './cj-utils.js?v=11';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -17,7 +17,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, signups: [], openEv: null, editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, signups: [], openEv: null, joining: false, rpError: '', editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -917,7 +917,7 @@ function roleplayBlock(ev) {
     if (isMine) body = '<span class="rp-me">Você está aqui</span>';
     else if (taken) body = `<span class="rp-taken">Ocupada por ${esc(taken.name || 'outra aluna')}</span>`;
     else if (past) body = '<span class="rp-taken">Encerrado</span>';
-    else body = `<button class="btn btn-ghost small" type="button" data-role="${role}">${role === 'observadora' ? 'Quero assistir' : `Quero ser ${role === 'closer' ? 'a closer' : 'a cliente'}`}</button>`;
+    else body = `<button class="btn btn-ghost small" type="button" data-role="${role}" ${state.joining ? 'disabled' : ''}>${state.joining ? 'Aguarde...' : (role === 'observadora' ? 'Quero assistir' : `Quero ser ${role === 'closer' ? 'a closer' : 'a cliente'}`)}</button>`;
     return `<div class="rp-card${isMine ? ' is-mine' : ''}${taken && !isMine ? ' is-taken' : ''}">
       <b>${ROLE_LABEL[role]}</b><small>${desc}</small>${body}</div>`;
   };
@@ -930,28 +930,41 @@ function roleplayBlock(ev) {
       ${card('observadora', 'Assiste e comenta')}
     </div>
     ${mine ? `<div class="rp-mine">Sua inscrição: <b>${ROLE_LABEL[mine.role]}</b>${past ? '' : ' <button class="link-btn" type="button" data-role-cancel="1">Cancelar inscrição</button>'}</div>` : ''}
-    <div id="rp-msg" class="msg err" hidden></div>
+    ${state.rpError ? `<div id="rp-msg" class="msg err">${esc(state.rpError)}</div>` : ''}
   </div>`;
 }
 
 async function roleplayJoin(ev, role) {
+  if (state.joining) return;
   const uid = state.user.uid;
-  const mine = mySignup(ev.id);
-  if (mine && mine.role === role) return;
-  const b = writeBatch(db);
-  if (mine) b.delete(doc(db, 'signups', mine.id));
-  const id = role === 'observadora' ? `${ev.id}_obs_${uid}` : `${ev.id}_${role}`;
-  b.set(doc(db, 'signups', id), { eventId: ev.id, role, uid, name: (state.profile && state.profile.name) || '', createdAt: serverTimestamp() });
-  try { await b.commit(); toast(`Inscrição confirmada como ${ROLE_LABEL[role].toLowerCase()}.`); }
-  catch (e) {
-    const m = $('rp-msg');
-    if (m) { m.textContent = 'Não foi possível reservar. Essa vaga pode ter acabado de ser ocupada por outra aluna.'; m.hidden = false; }
+  state.joining = true; state.rpError = '';
+  openEvent(ev.id);
+  try {
+    /* le o que a aluna tem de fato no banco (nao so o que esta na tela) e troca tudo de uma vez: so existe 1 papel por aluna */
+    const cur = await getDocs(query(collection(db, 'signups'), where('eventId', '==', ev.id), where('uid', '==', uid)));
+    const id = role === 'observadora' ? `${ev.id}_obs_${uid}` : `${ev.id}_${role}`;
+    if (!cur.docs.some((d) => d.id === id)) {
+      const b = writeBatch(db);
+      cur.docs.forEach((d) => b.delete(doc(db, 'signups', d.id)));
+      b.set(doc(db, 'signups', id), { eventId: ev.id, role, uid, name: (state.profile && state.profile.name) || '', createdAt: serverTimestamp() });
+      await b.commit();
+    }
+    toast(`Inscrição confirmada como ${ROLE_LABEL[role].toLowerCase()}.`);
+  } catch (e) {
+    console.error('inscricao roleplay', e);
+    const denied = e && e.code === 'permission-denied';
+    if (denied && role === 'observadora') state.rpError = 'Sem permissão para gravar a inscrição. Avise a Cris: as regras do Firestore (versão mais recente) precisam ser publicadas no Firebase.';
+    else if (denied) state.rpError = 'Não foi possível reservar. A vaga pode ter acabado de ser ocupada por outra aluna. Se ela aparece livre e o erro continua, as regras do Firestore (versão mais recente) precisam ser publicadas no Firebase.';
+    else state.rpError = friendlyError(e);
   }
+  state.joining = false;
+  if (state.openEv === ev.id) openEvent(ev.id);
 }
 
 function openEvent(id) {
   const ev = state.events.find((x) => x.id === id);
   if (!ev) return;
+  if (state.openEv !== id) { state.rpError = ''; state.joining = false; }
   state.openEv = id;
   const link = safeUrl(ev.link);
   $('ev-box').innerHTML = `
@@ -968,13 +981,13 @@ function openEvent(id) {
       </div>
     </div>`;
   $('ev-modal').hidden = false;
-  $('ev-close').onclick = () => { $('ev-modal').hidden = true; state.openEv = null; };
+  $('ev-close').onclick = () => { $('ev-modal').hidden = true; state.openEv = null; state.rpError = ''; };
   $('ev-ics').onclick = () => downloadICS(ev);
-  $('ev-box').querySelectorAll('[data-role]').forEach((b) => { b.onclick = () => { b.disabled = true; roleplayJoin(ev, b.dataset.role); }; });
+  $('ev-box').querySelectorAll('[data-role]').forEach((b) => { b.onclick = () => roleplayJoin(ev, b.dataset.role); });
   const cx = $('ev-box').querySelector('[data-role-cancel]');
   if (cx) cx.onclick = async () => {
     const m = mySignup(ev.id); if (!m) return;
-    try { await deleteDoc(doc(db, 'signups', m.id)); toast('Inscrição cancelada.'); } catch (e) { toast(friendlyError(e)); }
+    try { await deleteDoc(doc(db, 'signups', m.id)); state.rpError = ''; toast('Inscrição cancelada.'); } catch (e) { toast(friendlyError(e)); }
   };
 }
 $('ev-modal').addEventListener('click', (e) => { if (e.target === $('ev-modal')) $('ev-modal').hidden = true; });
