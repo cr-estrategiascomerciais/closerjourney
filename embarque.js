@@ -3,13 +3,13 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut, sendPasswordResetEmail
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import {
-  doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, onSnapshot, serverTimestamp
+  doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, where, onSnapshot, serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp
-} from './cj-utils.js?v=9';
+} from './cj-utils.js?v=10';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -17,7 +17,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, signups: [], openEv: null, editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -70,7 +70,7 @@ if (!configured) {
 function cleanup() {
   state.unsubs.forEach((u) => u());
   state.unsubs = [];
-  state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.notes = {}; state.editingSub = false;
+  state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.notes = {}; state.signups = []; state.openEv = null; state.editingSub = false;
   state.openLesson = null;
   const sl = $('s-lesson'); sl.innerHTML = ''; sl.dataset.lessonId = ''; sl.dataset.mediaKey = ''; sl.dataset.infoKey = ''; sl.dataset.subKey = '';
 }
@@ -141,6 +141,12 @@ function startApp() {
       return { id: d.id, ...x, start: x.start.toDate() };
     });
     renderCal();
+  }, onErr));
+
+  state.unsubs.push(onSnapshot(collection(db, 'signups'), (snap) => {
+    state.signups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderCal();
+    if (state.openEv && !$('ev-modal').hidden) openEvent(state.openEv);
   }, onErr));
 
   state.unsubs.push(onSnapshot(query(collection(db, 'submissions'), where('uid', '==', uid)), (snap) => {
@@ -878,7 +884,7 @@ function renderCal() {
     const d = brParts(e.start).date.split('-');
     return `<li>
       <div class="when"><b>${d[2]}/${d[1]}</b><span>${esc(fmtTime(e.start))}</span></div>
-      <div class="what"><b>${esc(e.title)}</b><small>${esc(typeLabel(e.type))} · ${esc(fmtDay(e.start))}</small></div>
+      <div class="what"><b>${esc(e.title)}</b><small>${esc(typeLabel(e.type))} · ${esc(fmtDay(e.start))}${e.type === 'roleplay' && mySignup(e.id) ? ` · <span class="rp-chip">Você: ${esc(ROLE_LABEL[mySignup(e.id).role])}</span>` : ''}</small></div>
       <button class="btn btn-ghost small go" type="button" data-ev="${esc(e.id)}">Detalhes</button></li>`;
   }).join('') : '<li class="empty" style="display:block">Nenhum encontro agendado por enquanto.</li>';
 }
@@ -895,15 +901,65 @@ document.addEventListener('click', (e) => {
   if (b) openEvent(b.dataset.ev);
 });
 
+const ROLE_LABEL = { closer: 'Closer', cliente: 'Cliente', observadora: 'Observadora' };
+const mySignup = (evId) => state.signups.find((x) => x.eventId === evId && x.uid === state.user.uid);
+
+/* inscricao no roleplay: 1 vaga de closer, 1 de cliente, observadoras sem limite */
+function roleplayBlock(ev) {
+  const mine = mySignup(ev.id);
+  const slot = (role) => state.signups.find((x) => x.eventId === ev.id && x.role === role);
+  const obs = state.signups.filter((x) => x.eventId === ev.id && x.role === 'observadora');
+  const past = ev.start.getTime() < Date.now() - 60 * 60000;
+  const card = (role, desc) => {
+    const taken = role === 'observadora' ? null : slot(role);
+    const isMine = mine && mine.role === role;
+    let body;
+    if (isMine) body = '<span class="rp-me">Você está aqui</span>';
+    else if (taken) body = `<span class="rp-taken">Ocupada por ${esc(taken.name || 'outra aluna')}</span>`;
+    else if (past) body = '<span class="rp-taken">Encerrado</span>';
+    else body = `<button class="btn btn-ghost small" type="button" data-role="${role}">${role === 'observadora' ? 'Quero assistir' : `Quero ser ${role === 'closer' ? 'a closer' : 'a cliente'}`}</button>`;
+    return `<div class="rp-card${isMine ? ' is-mine' : ''}${taken && !isMine ? ' is-taken' : ''}">
+      <b>${ROLE_LABEL[role]}</b><small>${desc}</small>${body}</div>`;
+  };
+  return `<div class="rp-box">
+    <div class="rp-h">Inscrição no roleplay</div>
+    <p class="rp-sub">Cada roleplay tem 1 vaga de closer e 1 de cliente. As demais alunas entram como observadoras${obs.length ? ` (${obs.length} inscrita${obs.length > 1 ? 's' : ''})` : ''}.</p>
+    <div class="rp-grid">
+      ${card('closer', 'Conduz a venda')}
+      ${card('cliente', 'Interpreta o lead')}
+      ${card('observadora', 'Assiste e comenta')}
+    </div>
+    ${mine ? `<div class="rp-mine">Sua inscrição: <b>${ROLE_LABEL[mine.role]}</b>${past ? '' : ' <button class="link-btn" type="button" data-role-cancel="1">Cancelar inscrição</button>'}</div>` : ''}
+    <div id="rp-msg" class="msg err" hidden></div>
+  </div>`;
+}
+
+async function roleplayJoin(ev, role) {
+  const uid = state.user.uid;
+  const mine = mySignup(ev.id);
+  if (mine && mine.role === role) return;
+  const b = writeBatch(db);
+  if (mine) b.delete(doc(db, 'signups', mine.id));
+  const id = role === 'observadora' ? `${ev.id}_obs_${uid}` : `${ev.id}_${role}`;
+  b.set(doc(db, 'signups', id), { eventId: ev.id, role, uid, name: (state.profile && state.profile.name) || '', createdAt: serverTimestamp() });
+  try { await b.commit(); toast(`Inscrição confirmada como ${ROLE_LABEL[role].toLowerCase()}.`); }
+  catch (e) {
+    const m = $('rp-msg');
+    if (m) { m.textContent = 'Não foi possível reservar. Essa vaga pode ter acabado de ser ocupada por outra aluna.'; m.hidden = false; }
+  }
+}
+
 function openEvent(id) {
   const ev = state.events.find((x) => x.id === id);
   if (!ev) return;
+  state.openEv = id;
   const link = safeUrl(ev.link);
   $('ev-box').innerHTML = `
     <span class="kind-tag">${esc(typeLabel(ev.type))}</span>
     <h3>${esc(ev.title)}</h3>
     <p class="sub">${esc(fmtLong(ev.start))}${ev.durationMin ? ' · ' + esc(ev.durationMin) + ' min' : ''}</p>
     ${ev.notes ? `<p style="white-space:pre-line">${linkify(ev.notes)}</p>` : ''}
+    ${ev.type === 'roleplay' ? roleplayBlock(ev) : ''}
     <div class="foot">
       <button class="btn btn-ghost small" id="ev-ics" type="button">Adicionar ao meu calendário</button>
       <div class="btn-row">
@@ -912,8 +968,14 @@ function openEvent(id) {
       </div>
     </div>`;
   $('ev-modal').hidden = false;
-  $('ev-close').onclick = () => ($('ev-modal').hidden = true);
+  $('ev-close').onclick = () => { $('ev-modal').hidden = true; state.openEv = null; };
   $('ev-ics').onclick = () => downloadICS(ev);
+  $('ev-box').querySelectorAll('[data-role]').forEach((b) => { b.onclick = () => { b.disabled = true; roleplayJoin(ev, b.dataset.role); }; });
+  const cx = $('ev-box').querySelector('[data-role-cancel]');
+  if (cx) cx.onclick = async () => {
+    const m = mySignup(ev.id); if (!m) return;
+    try { await deleteDoc(doc(db, 'signups', m.id)); toast('Inscrição cancelada.'); } catch (e) { toast(friendlyError(e)); }
+  };
 }
 $('ev-modal').addEventListener('click', (e) => { if (e.target === $('ev-modal')) $('ev-modal').hidden = true; });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('ev-modal').hidden = true; });
