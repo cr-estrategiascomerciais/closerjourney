@@ -10,15 +10,15 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
-  genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword
-} from './cj-utils.js?v=11';
+  genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
+} from './cj-utils.js?v=12';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
 const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
-const S = { lessons: [], events: [], signups: [], evOpen: null, students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
+const S = { lessons: [], events: [], signups: [], progress: {}, dFilter: 'all', dSort: 'access', signups0: 0, evOpen: null, students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
 
 let toastTimer;
 function toast(msg) {
@@ -72,7 +72,7 @@ function start() {
 
   S.unsubs.push(onSnapshot(collection(db, 'lessons'), (snap) => {
     S.lessons = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    renderLessons();
+    renderLessons(); renderDash();
   }, onErr));
   S.unsubs.push(onSnapshot(collection(db, 'events'), (snap) => {
     S.events = snap.docs.map((d) => { const x = d.data(); return { id: d.id, ...x, start: x.start.toDate() }; });
@@ -82,14 +82,18 @@ function start() {
     S.signups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderEvSignups();
   }, onErr));
+  S.unsubs.push(onSnapshot(collection(db, 'progress'), (snap) => {
+    const m = {}; snap.docs.forEach((d) => { m[d.id] = d.data(); }); S.progress = m;
+    renderDash();
+  }, onErr));
   S.unsubs.push(onSnapshot(collection(db, 'submissions'), (snap) => {
     S.subs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    renderSubs();
+    renderSubs(); renderDash();
   }, onErr));
   S.unsubs.push(onSnapshot(collection(db, 'users'), (snap) => {
     S.students = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => u.role !== 'admin')
       .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
-    renderStudents();
+    renderStudents(); renderDash();
   }, onErr));
 
   $('s-pass').value = genPassword();
@@ -99,7 +103,7 @@ function start() {
 /* ---------- abas ---------- */
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['aulas', 'cal', 'corr', 'alunas'].forEach((k) => ($('t-' + k).hidden = k !== t.dataset.tab));
+  ['aulas', 'cal', 'corr', 'dash', 'alunas'].forEach((k) => ($('t-' + k).hidden = k !== t.dataset.tab));
 }));
 
 /* ============================================================
@@ -582,21 +586,175 @@ function eventModal(ev) {
 /* ============================================================
    Alunas
    ============================================================ */
+function accessChip(u) {
+  const a = accessInfo(u);
+  if (!u.active) return '<span class="chip lvl-off">Desativada</span>';
+  return `<span class="chip lvl-${a.level}">${esc(a.label)}</span>`;
+}
+
 function renderStudents() {
   const ul = $('students');
   if (!S.students.length) { ul.innerHTML = '<li class="empty">Nenhuma aluna cadastrada ainda.</li>'; return; }
-  ul.innerHTML = S.students.map((u) => `
+  ul.innerHTML = S.students.map((u) => {
+    const a = accessInfo(u);
+    return `
     <li class="a-item" style="grid-template-columns:1fr auto">
-      <div><div class="t">${esc(u.name)} <span class="badge ${u.active ? 'on' : 'off'}">${u.active ? 'Ativa' : 'Desativada'}</span></div>
-      <div class="m">${esc(u.email)}</div></div>
+      <div><div class="t">${esc(u.name)} <span class="badge ${u.active ? 'on' : 'off'}">${u.active ? 'Ativa' : 'Desativada'}</span> ${accessChip(u)}</div>
+      <div class="m">${esc(u.email)}${a.until ? ` · acesso até ${esc(fmtDMY(a.untilKey))}` : ''}</div></div>
       <div class="acts">
+        <button class="btn btn-ghost small" data-detail="${esc(u.id)}" type="button">Acompanhar</button>
+        <button class="btn btn-ghost small" data-access="${esc(u.id)}" type="button">Acesso</button>
         <button class="btn btn-ghost small" data-reset="${esc(u.id)}" type="button">Enviar link de nova senha</button>
         <button class="btn ${u.active ? 'danger' : 'btn-ghost'} small" data-toggle="${esc(u.id)}" type="button">${u.active ? 'Desativar' : 'Reativar'}</button>
-      </div></li>`).join('');
+      </div></li>`;
+  }).join('');
 }
+
+/* ============================================================
+   Acompanhamento das alunas (dashboard) e acesso
+   ============================================================ */
+function studentStats(u) {
+  const pub = S.lessons.filter((l) => l.published);
+  const prog = S.progress[u.id] || {};
+  const items = computeTrail(pub, prog.completed || {});
+  const done = items.filter((i) => i.done).length;
+  const total = items.length;
+  const cur = items.find((i) => i.current) || null;
+  const mine = S.subs.filter((x) => x.uid === u.id);
+  const pending = mine.filter((x) => x.status !== 'corrigida' && (pub.find((l) => l.id === x.lessonId) || {}).feedbackEnabled).length;
+  const secs = [prog.lastSeen, prog.updatedAt].map((t) => (t && t.seconds) || 0);
+  const lastSec = Math.max(...secs);
+  const last = lastSec ? { seconds: lastSec, toDate: () => new Date(lastSec * 1000) } : null;
+  const acc = accessInfo(u);
+  const ended = !u.active || acc.expired;
+  const idleDays = last ? (Date.now() / 1000 - lastSec) / 86400 : Infinity;
+  const finished = total > 0 && done === total;
+  return { u, items, done, total, pct: total ? Math.round((done / total) * 100) : 0, cur, mine, pending, last, acc, ended,
+    idle: !ended && !finished && idleDays > 7, finished };
+}
+
+function renderDash() {
+  const list = $('d-list');
+  if (!list) return;
+  const all = S.students.map(studentStats);
+  const active = all.filter((x) => !x.ended);
+  const soon = active.filter((x) => x.acc.level === 'soon' || x.acc.level === 'urgent');
+  const idle = all.filter((x) => x.idle);
+  const pend = all.reduce((n, x) => n + x.pending, 0);
+  const avg = active.length ? Math.round(active.reduce((n, x) => n + x.pct, 0) / active.length) : 0;
+  $('d-tiles').innerHTML = [
+    ['Alunas com acesso', active.length, `de ${all.length} cadastradas`, ''],
+    ['Progresso médio', avg + '%', 'entre as alunas com acesso', ''],
+    ['Acesso vencendo', soon.length, 'em até 30 dias', soon.length ? 'warn' : ''],
+    ['Paradas', idle.length, 'sem atividade há mais de 7 dias', idle.length ? 'warn' : ''],
+    ['Correções pendentes', pend, 'aguardando a Cris', pend ? 'warn' : '']
+  ].map(([t, v, sub, cls]) => `<div class="d-tile ${cls}"><small>${t}</small><b>${v}</b><span>${sub}</span></div>`).join('');
+
+  let rows = all.filter((x) => S.dFilter === 'all' || (S.dFilter === 'soon' && !x.ended && (x.acc.level === 'soon' || x.acc.level === 'urgent'))
+    || (S.dFilter === 'idle' && x.idle) || (S.dFilter === 'ended' && x.ended));
+  const byName = (a, b) => String(a.u.name).localeCompare(String(b.u.name), 'pt-BR');
+  const sorters = {
+    name: byName,
+    progress: (a, b) => a.pct - b.pct || byName(a, b),
+    activity: (a, b) => ((a.last && a.last.seconds) || 0) - ((b.last && b.last.seconds) || 0) || byName(a, b),
+    access: (a, b) => {
+      const k = (x) => (x.ended ? 1e9 : x.acc.until ? x.acc.days : 1e8);
+      return k(a) - k(b) || byName(a, b);
+    }
+  };
+  rows = rows.sort(sorters[S.dSort] || byName);
+
+  if (!rows.length) {
+    list.innerHTML = `<li class="empty">${S.students.length ? 'Nenhuma aluna neste filtro.' : 'Nenhuma aluna cadastrada ainda.'}</li>`;
+    return;
+  }
+  list.innerHTML = rows.map((x) => {
+    const { u, acc } = x;
+    const step = !x.total ? 'Sem etapas publicadas' : x.finished ? 'Concluiu todas as etapas' : (x.cur ? x.cur.title : '');
+    const mod = x.cur && !x.finished ? x.cur.module : '';
+    return `<li class="a-item d-row${x.ended ? ' is-ended' : ''}">
+      <div class="d-who"><div class="t">${esc(u.name)}${x.pending ? ` <span class="badge fb">${x.pending} p/ corrigir</span>` : ''}</div><div class="m">${esc(u.email)}</div></div>
+      <div class="d-step"><small>Etapa atual</small><b>${esc(step)}</b>${mod ? `<span>${esc(mod)}</span>` : ''}</div>
+      <div class="d-prog"><div class="bar"><i style="width:${x.pct}%"></i></div><span>${x.done} de ${x.total} etapas · ${x.pct}%</span></div>
+      <div class="d-act"><small>Última atividade</small><b>${esc(agoLabel(x.last))}</b>${x.idle ? '<span class="d-flag">parada</span>' : ''}</div>
+      <div class="d-acc">${accessChip(u)}<small>${acc.until ? 'até ' + esc(fmtDMY(acc.untilKey)) : 'acesso sem limite'}</small></div>
+      <div class="acts"><button class="btn btn-ghost small" data-dd="${esc(u.id)}" type="button">Detalhes</button></div>
+    </li>`;
+  }).join('');
+}
+
+document.querySelectorAll('[data-df]').forEach((b) => b.addEventListener('click', () => {
+  S.dFilter = b.dataset.df;
+  document.querySelectorAll('[data-df]').forEach((x) => x.classList.toggle('is-on', x === b));
+  renderDash();
+}));
+$('d-sort').addEventListener('change', () => { S.dSort = $('d-sort').value; renderDash(); });
+$('d-list').addEventListener('click', (e) => { const b = e.target.closest('[data-dd]'); if (b) studentModal(b.dataset.dd); });
+
+function studentModal(uid, focusAccess = false) {
+  const u = S.students.find((x) => x.id === uid);
+  if (!u) return;
+  const st = studentStats(u);
+  const acc = st.acc;
+  const subOf = (lid) => st.mine.find((x) => x.lessonId === lid);
+  const steps = st.items.map((i) => {
+    const sub = i.kind === 'atividade' ? subOf(i.id) : null;
+    const state = i.done ? '<span class="st st-done">Finalizada</span>' : i.current ? '<span class="st st-cur">Em andamento</span>' : '<span class="st st-lock">Bloqueada</span>';
+    const sb = sub ? (sub.status === 'corrigida' ? '<span class="badge on">Corrigida</span>' : (i.feedbackEnabled ? '<span class="badge off">Resposta aguardando correção</span>' : '<span class="badge on">Respondida</span>')) : (i.kind === 'atividade' ? '<span class="badge">Sem resposta</span>' : '');
+    return `<li><span class="t">${esc(i.title)} <small>${esc(i.module || '')}</small></span><span class="r">${sb} ${state}</span></li>`;
+  }).join('');
+  openModal(`
+    <h3>${esc(u.name)}</h3>
+    <p class="sub">${esc(u.email)} · ${st.done} de ${st.total} etapas (${st.pct}%) · última atividade: ${esc(agoLabel(st.last).toLowerCase())}</p>
+    <div class="d-access f${focusAccess ? ' is-focus' : ''}" id="acc-box">
+      <div class="rp-h">Acesso à plataforma</div>
+      <p class="sub" style="margin:0">${u.active ? (acc.until ? `Atual: ${esc(acc.label)} (até ${esc(fmtDMY(acc.untilKey))}).` : 'Atual: sem data limite.') : 'A aluna está desativada.'}</p>
+      <div class="row">
+        <label>Acesso até <input id="acc-date" type="date" value="${esc(acc.untilKey || '')}"></label>
+        <div class="chips"><span class="hint">Somar ao fim atual (ou a hoje, se já passou)</span>
+          <div class="btn-row">
+            <button class="btn btn-ghost small" type="button" data-am="1">+1 mês</button>
+            <button class="btn btn-ghost small" type="button" data-am="3">+3 meses</button>
+            <button class="btn btn-ghost small" type="button" data-am="6">+6 meses</button>
+            <button class="btn btn-ghost small" type="button" id="acc-none">Sem limite</button>
+          </div></div>
+      </div>
+      <div id="acc-msg" class="msg err" hidden></div>
+      <div class="btn-row"><button class="btn btn-primary small" type="button" id="acc-save">Salvar acesso</button></div>
+    </div>
+    <h4 class="d-h">Etapas da jornada</h4>
+    ${st.total ? `<ul class="d-steps">${steps}</ul>` : '<p class="sub">Nenhuma etapa publicada ainda.</p>'}
+    <div class="foot"><button class="btn btn-ghost small" type="button" id="d-close">Fechar</button></div>`);
+  $('box').classList.add('wide');
+  $('d-close').onclick = closeModal;
+  document.querySelectorAll('[data-am]').forEach((b) => {
+    b.onclick = () => {
+      const cur = $('acc-date').value;
+      const today = todayKey();
+      const base = cur && cur > today ? cur : today;
+      $('acc-date').value = addMonthsKey(base, Number(b.dataset.am));
+    };
+  });
+  $('acc-none').onclick = () => { $('acc-date').value = ''; };
+  $('acc-save').onclick = async () => {
+    const v = $('acc-date').value;
+    try {
+      await updateDoc(doc(db, 'users', u.id), { accessUntil: v ? Timestamp.fromDate(endOfDayBr(v)) : null });
+      closeModal(); toast(v ? `Acesso de ${u.name.split(' ')[0]} vai até ${fmtDMY(v)}.` : 'Acesso sem data limite.');
+    } catch (err) { flash($('acc-msg'), friendlyError(err), 'err'); }
+  };
+  if (focusAccess) $('acc-date').focus();
+}
+
+/* atalhos do cadastro de aluna */
+document.querySelectorAll('[data-sm]').forEach((b) => b.addEventListener('click', () => {
+  $('s-until').value = addMonthsKey(todayKey(), Number(b.dataset.sm));
+}));
 
 $('students').addEventListener('click', async (e) => {
   const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.detail) { studentModal(t.dataset.detail); return; }
+  if (t.dataset.access) { studentModal(t.dataset.access, true); return; }
   if (t.dataset.reset) {
     const u = S.students.find((x) => x.id === t.dataset.reset);
     try { await sendPasswordResetEmail(auth, u.email); toast('Link enviado para ' + u.email); }
@@ -627,8 +785,10 @@ $('stu-form').addEventListener('submit', async (e) => {
     const cred = await createUserWithEmailAndPassword(sec, email, pass);
     const uid = cred.user.uid;
     await signOut(sec);
+    const until = $('s-until').value;
     await setDoc(doc(db, 'users', uid), {
-      name, email: email.toLowerCase(), role: 'student', active: true, createdAt: serverTimestamp()
+      name, email: email.toLowerCase(), role: 'student', active: true, createdAt: serverTimestamp(),
+      accessUntil: until ? Timestamp.fromDate(endOfDayBr(until)) : null
     });
     const url = new URL('embarque.html', location.href).href;
     msg.className = 'msg ok'; msg.hidden = false;
@@ -636,13 +796,13 @@ $('stu-form').addEventListener('submit', async (e) => {
 `Olá, ${name.split(' ')[0]}! Seu acesso à Área de Embarque da Closer Journey:
 Link: ${url}
 E-mail: ${email}
-Senha provisória: ${pass}`)}</div>
+Senha provisória: ${pass}${until ? `\nAcesso até: ${fmtDMY(until)}` : ''}`)}</div>
       <p style="margin:8px 0 0"><button class="btn btn-ghost small" type="button" id="copy-cred">Copiar mensagem</button></p>`;
     $('copy-cred').onclick = async () => {
       try { await navigator.clipboard.writeText(msg.querySelector('.cred').textContent); toast('Copiado.'); }
       catch { toast('Selecione o texto e copie manualmente.'); }
     };
-    $('s-name').value = ''; $('s-email').value = ''; $('s-pass').value = genPassword();
+    $('s-name').value = ''; $('s-email').value = ''; $('s-until').value = ''; $('s-pass').value = genPassword();
   } catch (err) {
     console.error(err);
     flash(msg, friendlyError(err), 'err');
