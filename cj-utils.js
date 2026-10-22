@@ -416,3 +416,46 @@ export function groupFields(fields) {
   }
   return groups;
 }
+
+/* ============================================================
+   Acesso com data limite
+   ============================================================ */
+/* fim do dia escolhido, no horario de Brasilia: a aluna usa a plataforma ate 23:59 desse dia */
+export const endOfDayBr = (dateStr) => new Date(`${dateStr}T23:59:59-03:00`);
+
+const daysBetweenKeys = (a, b) => {
+  const [y1, m1, d1] = a.split('-').map(Number), [y2, m2, d2] = b.split('-').map(Number);
+  return Math.round((Date.UTC(y2, m2 - 1, d2) - Date.UTC(y1, m1 - 1, d1)) / 86400000);
+};
+
+/* retorna { until, untilKey, days, expired, label, level } ; level: none | ok | soon | urgent | expired */
+export function accessInfo(u, now = new Date()) {
+  const ts = u && u.accessUntil;
+  const until = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
+  if (!until || Number.isNaN(until.getTime())) return { until: null, untilKey: '', days: null, expired: false, label: 'Sem data limite', level: 'none' };
+  const untilKey = brParts(until).date;
+  const days = daysBetweenKeys(brParts(now).date, untilKey);
+  const expired = now.getTime() > until.getTime();
+  if (expired) return { until, untilKey, days: 0, expired: true, label: `Expirado em ${fmtDMY(untilKey)}`, level: 'expired' };
+  const label = days === 0 ? 'Expira hoje' : days === 1 ? 'Falta 1 dia' : `Faltam ${days} dias`;
+  return { until, untilKey, days, expired: false, label, level: days <= 7 ? 'urgent' : days <= 30 ? 'soon' : 'ok' };
+}
+
+/* soma meses a uma data AAAA-MM-DD (mantem o dia; ajusta fim de mes) */
+export function addMonthsKey(key, n) {
+  const [y, m, d] = key.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, 1));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  const dd = Math.min(d, last);
+  return `${t.getUTCFullYear()}-${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+
+/* "ha 3 dias" a partir de um Timestamp/Date */
+export function agoLabel(ts, now = new Date()) {
+  const d = ts ? (ts.toDate ? ts.toDate() : new Date(ts)) : null;
+  if (!d || Number.isNaN(d.getTime())) return 'Sem registro';
+  const n = daysBetweenKeys(brParts(d).date, brParts(now).date);
+  if (n <= 0) return 'Hoje';
+  if (n === 1) return 'Ontem';
+  return `Há ${n} dias`;
+}
