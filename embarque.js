@@ -8,8 +8,8 @@ import {
 import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
-  groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp
-} from './cj-utils.js?v=11';
+  groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp, accessInfo, fmtDMY
+} from './cj-utils.js?v=12';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -28,6 +28,15 @@ const ICON = {
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
 };
+
+function renderAccessNote() {
+  const box = $('access-note');
+  if (!box || !state.profile) return;
+  const a = accessInfo(state.profile);
+  if (!a.until || a.expired) { box.innerHTML = ''; return; }
+  const warn = a.level === 'urgent' ? ' is-urgent' : a.level === 'soon' ? ' is-soon' : '';
+  box.innerHTML = `<div class="access-note${warn}">Seu acesso vai até <b>${esc(fmtDMY(a.untilKey))}</b> <span>(${esc(a.label.toLowerCase())})</span>.${warn ? ' Quer continuar depois dessa data? Fale com a Cris.' : ''}</div>`;
+}
 
 let toastTimer;
 function toast(msg) {
@@ -57,6 +66,12 @@ if (!configured) {
         show('v-denied');
         return;
       }
+      const acc = accessInfo(p);
+      if (acc.expired) {
+        $('denied-text').textContent = `Seu acesso à Área de Embarque terminou em ${fmtDMY(acc.untilKey)}. Para renovar, fale com a Cris.`;
+        show('v-denied');
+        return;
+      }
       state.user = user; state.profile = p;
       startApp();
     } catch (e) {
@@ -68,6 +83,7 @@ if (!configured) {
 }
 
 function cleanup() {
+  clearInterval(state.accessTimer);
   state.unsubs.forEach((u) => u());
   state.unsubs = [];
   state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.notes = {}; state.signups = []; state.openEv = null; state.editingSub = false;
@@ -120,6 +136,21 @@ function startApp() {
   $('who-name').textContent = firstName(p.name) || 'aluna';
   $('hello').textContent = `Bem-vinda a bordo${firstName(p.name) ? ', ' + firstName(p.name) : ''}`;
   $('admin-link').hidden = p.role !== 'admin';
+  renderAccessNote();
+  /* registra o acesso (o painel da Cris mostra "ultima atividade") */
+  setDoc(doc(db, 'progress', state.user.uid), { lastSeen: serverTimestamp() }, { merge: true }).catch(() => {});
+  /* se a data limite chegar com a aluna logada, o acesso e encerrado sem precisar recarregar */
+  clearInterval(state.accessTimer);
+  state.accessTimer = setInterval(async () => {
+    if (!accessInfo(state.profile).expired) return;
+    try { const fresh = await getDoc(doc(db, 'users', state.user.uid)); if (fresh.exists()) state.profile = fresh.data(); } catch { /* segue com o que tem */ }
+    const acc = accessInfo(state.profile);
+    if (acc.expired || state.profile.active !== true) {
+      cleanup();
+      $('denied-text').textContent = acc.expired ? `Seu acesso à Área de Embarque terminou em ${fmtDMY(acc.untilKey)}. Para renovar, fale com a Cris.` : 'Seu acesso está desativado no momento. Fale com a Cris.';
+      show('v-denied');
+    } else renderAccessNote();
+  }, 60000);
 
   const now = brParts(new Date()).date.split('-');
   state.calYear = Number(now[0]); state.calMonth = Number(now[1]) - 1;
@@ -857,7 +888,7 @@ async function setDone(id, value, next) {
   state.completed = nextMap;
   render();
   try {
-    await setDoc(doc(db, 'progress', state.user.uid), { completed: nextMap, updatedAt: serverTimestamp() });
+    await setDoc(doc(db, 'progress', state.user.uid), { completed: nextMap, updatedAt: serverTimestamp() }, { mergeFields: ['completed', 'updatedAt'] });
     if (value) toast(next ? 'Etapa finalizada! A próxima foi liberada.' : 'Etapa finalizada!');
   } catch (e) {
     console.error(e);
