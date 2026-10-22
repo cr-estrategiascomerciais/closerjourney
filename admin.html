@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=10">
+<link rel="stylesheet" href="area.css?v=12">
 </head>
 <body class="area embarque">
 
@@ -68,6 +68,7 @@
       <button class="tab" role="tab" data-tab="aulas" aria-selected="true">Aulas e atividades</button>
       <button class="tab" role="tab" data-tab="cal" aria-selected="false">Calendário</button>
       <button class="tab" role="tab" data-tab="corr" aria-selected="false" id="tab-corr">Correções</button>
+      <button class="tab" role="tab" data-tab="dash" aria-selected="false">Acompanhamento</button>
       <button class="tab" role="tab" data-tab="alunas" aria-selected="false">Alunas</button>
     </div>
 
@@ -178,6 +179,28 @@
       <ul class="a-list" id="subs"></ul>
     </section>
 
+    <!-- ACOMPANHAMENTO -->
+    <section id="t-dash" hidden>
+      <div id="d-tiles" class="d-tiles"></div>
+      <div class="toolbar">
+        <div class="seg" role="tablist" aria-label="Filtro de alunas">
+          <button type="button" class="seg-b is-on" data-df="all">Todas</button>
+          <button type="button" class="seg-b" data-df="soon">Acesso vencendo</button>
+          <button type="button" class="seg-b" data-df="idle">Paradas</button>
+          <button type="button" class="seg-b" data-df="ended">Encerradas</button>
+        </div>
+        <label class="d-sort">Ordenar por
+          <select id="d-sort">
+            <option value="access">Fim do acesso (mais próximo)</option>
+            <option value="progress">Progresso (menor primeiro)</option>
+            <option value="activity">Última atividade (mais antiga)</option>
+            <option value="name">Nome</option>
+          </select>
+        </label>
+      </div>
+      <ul class="a-list d-list" id="d-list"></ul>
+    </section>
+
     <!-- ALUNAS -->
     <section id="t-alunas" hidden>
       <div class="panel">
@@ -189,6 +212,19 @@
             <label>E-mail <input id="s-email" type="email" required></label>
           </div>
           <label>Senha provisória <input id="s-pass" required minlength="6"></label>
+          <div class="row">
+            <label>Acesso até <span class="hint">Opcional. Depois dessa data a aluna não entra mais. Em branco, sem data limite.</span>
+              <input id="s-until" type="date"></label>
+            <div class="chips" aria-label="Atalhos de duração">
+              <span class="hint">Atalhos a partir de hoje</span>
+              <div class="btn-row">
+                <button class="btn btn-ghost small" type="button" data-sm="3">3 meses</button>
+                <button class="btn btn-ghost small" type="button" data-sm="4">4 meses</button>
+                <button class="btn btn-ghost small" type="button" data-sm="6">6 meses</button>
+                <button class="btn btn-ghost small" type="button" data-sm="12">12 meses</button>
+              </div>
+            </div>
+          </div>
           <div id="s-msg" class="msg" hidden></div>
           <div class="btn-row">
             <button class="btn btn-primary" id="s-go" type="submit">Criar acesso</button>
@@ -208,6 +244,6 @@
 <div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="admin.js?v=11"></script>
+<script type="module" src="admin.js?v=12"></script>
 </body>
 </html>
