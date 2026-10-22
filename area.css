@@ -563,3 +563,48 @@ body.embarque .ticket-card, body.embarque .modal .box { color: var(--ink); }
 .rp-empty { color: var(--ink-soft); }
 .rp-row .link-btn { color: var(--rose); font-size: 13px; }
 @media (max-width: 640px) { .rp-grid { grid-template-columns: 1fr; } }
+
+/* ===== v12: acesso com data limite e acompanhamento ===== */
+.access-note { background: rgba(228,220,214,.1); border: 1px solid rgba(228,220,214,.22); color: var(--cream); border-radius: 12px; padding: 10px 14px; margin: 0 0 16px; font-size: 14.5px; }
+.access-note span { opacity: .8; }
+.access-note.is-soon { border-color: #e6b655; background: rgba(230,182,85,.14); }
+.access-note.is-urgent { border-color: var(--rose-soft); background: rgba(229,138,160,.16); }
+
+/* acompanhamento das alunas (admin) */
+.chip { display: inline-block; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; border: 1px solid var(--line); background: #fff; color: var(--deep); white-space: nowrap; }
+.chip.lvl-ok { background: #e3f3e7; border-color: #bfe0c8; color: #1f6a35; }
+.chip.lvl-soon { background: #fdf1d6; border-color: #ecd49a; color: #7a5300; }
+.chip.lvl-urgent { background: #fbe4e8; border-color: #efb6c1; color: #a32142; }
+.chip.lvl-expired { background: #a32142; border-color: #a32142; color: #fff; }
+.chip.lvl-none { background: #f1ece8; color: var(--ink-soft); }
+.chip.lvl-off { background: #ece7e4; color: var(--ink-soft); }
+.d-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin: 0 0 18px; }
+.d-tile { background: var(--paper); color: var(--ink); border-radius: 14px; padding: 14px 16px; display: grid; gap: 2px; }
+.d-tile small { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--mid); font-weight: 600; }
+.d-tile b { font-family: 'Playfair Display', serif; font-weight: 500; font-size: 30px; color: var(--deep); line-height: 1.1; }
+.d-tile span { font-size: 12.5px; color: var(--ink-soft); }
+.d-tile.warn b { color: var(--rose); }
+.d-sort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--cream); }
+.d-sort select { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; background: var(--paper); color: var(--ink); }
+.d-row { display: grid !important; grid-template-columns: minmax(150px, 1.2fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(100px, .7fr) minmax(120px, .8fr) auto; gap: 16px; align-items: center; }
+.d-row.is-ended { opacity: .75; }
+.d-row small { display: block; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); }
+.d-row b { display: block; font-weight: 600; color: var(--deep); font-size: 14.5px; line-height: 1.3; }
+.d-step span { font-size: 12.5px; color: var(--ink-soft); }
+.d-prog .bar { height: 8px; border-radius: 999px; background: #eadfe3; overflow: hidden; }
+.d-prog .bar i { display: block; height: 100%; background: var(--rose); border-radius: 999px; }
+.d-prog span { display: block; margin-top: 5px; font-size: 12.5px; color: var(--ink-soft); }
+.d-flag { font-size: 12px; font-weight: 600; color: var(--rose); }
+.d-acc small { margin-top: 4px; text-transform: none; letter-spacing: 0; }
+.d-access { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin: 12px 0 18px; display: grid; gap: 10px; background: #fff; }
+.d-access.is-focus { border-color: var(--rose); }
+.d-h { margin: 6px 0 8px; font-family: 'Playfair Display', serif; font-weight: 500; font-size: 18px; color: var(--deep); }
+.d-steps { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 6px; }
+.d-steps li { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; font-size: 14.5px; }
+.d-steps .t small { color: var(--ink-soft); margin-left: 6px; font-size: 12px; }
+.d-steps .r { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.st { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; }
+.st-done { background: #e3f3e7; color: #1f6a35; }
+.st-cur { background: #fbe4e8; color: #a32142; }
+.st-lock { background: #ece7e4; color: var(--ink-soft); }
+@media (max-width: 1000px) { .d-tiles { grid-template-columns: repeat(2, 1fr); } .d-row { grid-template-columns: 1fr 1fr; } .d-row .acts { grid-column: 1 / -1; } }
