@@ -9,7 +9,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp, accessInfo, fmtDMY
-} from './cj-utils.js?v=13';
+} from './cj-utils.js?v=14';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -17,7 +17,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, signups: [], openEv: null, joining: false, rpError: '', editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', signups: [], openEv: null, joining: false, rpError: '', editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -340,7 +340,11 @@ function loadLessonImages(l) {
       if (!s.exists()) return;
       state.imgs[id] = s.data().data;
       if (state.openLesson === l.id) { const sec = $('s-lesson'); if (sec) sec.dataset.infoKey = ''; render(); }
-    }).catch(() => { delete state.imgs[id]; });
+    }).catch((err) => {
+      delete state.imgs[id];
+      state.imgErr = (err && err.code === 'permission-denied') ? 'Sem permissão para ver as imagens desta etapa. Avise a Cris para republicar as regras do Firestore.' : 'Não foi possível carregar as imagens agora. Atualize a página.';
+      const sec = $('s-lesson'); if (sec) sec.dataset.infoKey = ''; if (state.openLesson === l.id) render();
+    });
   });
 }
 
@@ -478,7 +482,7 @@ function renderLesson() {
   /* ---- conteudo: descricao, texto da atividade, PDF, link ---- */
   loadLessonImages(l);
   const imgList = (l.images || []).map((id) => state.imgs[id]).filter(Boolean);
-  const infoKey = JSON.stringify([l.kind, l.description, l.body, l.pdfUrl, l.linkUrl, l.images, imgList.length]);
+  const infoKey = JSON.stringify([l.kind, l.description, l.body, l.pdfUrl, l.linkUrl, l.images, imgList.length, state.imgErr]);
   if (sec.dataset.infoKey !== infoKey) {
     sec.dataset.infoKey = infoKey;
     const link = safeUrl(l.linkUrl);
@@ -487,6 +491,7 @@ function renderLesson() {
     const parts = [];
     if (l.description) parts.push(`<div class="rich"><p>${linkify(l.description)}</p></div>`);
     if (l.body) parts.push(`<div class="rich">${renderRich(l.body)}</div>`);
+    if ((l.images || []).length && !imgList.length && state.imgErr) parts.push(`<p class="hint-inline">${esc(state.imgErr)}</p>`);
     if (imgList.length) parts.push(`<div class="lesson-imgs">${imgList.map((d, i) => `<figure><img src="${d}" alt="Imagem ${i + 1} da etapa" loading="lazy" data-zoom></figure>`).join('')}</div>`);
     if (pdf) parts.push(`<div class="pdf-wrap"><div class="pdf-head"><span>Material em PDF</span><a href="${esc(pdf.open)}" target="_blank" rel="noopener noreferrer">Abrir em tela cheia</a></div><iframe class="pdf-frame" src="${esc(pdf.embed)}" title="PDF da atividade" loading="lazy"></iframe></div>`);
     else if (pdfOther) parts.push(`<p><a class="btn btn-ghost small" href="${esc(pdfOther)}" target="_blank" rel="noopener noreferrer">Abrir PDF</a></p>`);

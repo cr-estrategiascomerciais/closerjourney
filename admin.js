@@ -11,7 +11,7 @@ import {
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
-} from './cj-utils.js?v=13';
+} from './cj-utils.js?v=14';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
