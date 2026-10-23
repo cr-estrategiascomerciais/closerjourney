@@ -11,7 +11,7 @@ import {
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
-} from './cj-utils.js?v=12';
+} from './cj-utils.js?v=13';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
@@ -194,7 +194,12 @@ async function moveLesson(id, dir) {
 async function delLesson(id) {
   const l = S.lessons.find((x) => x.id === id);
   if (!l || !confirm(`Excluir "${l.title}"? As alunas deixam de ver esta etapa.`)) return;
-  try { await deleteDoc(doc(db, 'lessons', id)); toast('Etapa excluída.'); }
+  try {
+    const b = writeBatch(db);
+    (l.images || []).forEach((iid) => b.delete(doc(db, 'lessonImages', iid)));
+    b.delete(doc(db, 'lessons', id));
+    await b.commit(); toast('Etapa excluída.');
+  }
   catch (e) { toast(friendlyError(e)); }
 }
 
@@ -211,6 +216,24 @@ $('seed').onclick = async () => {
     toast('Trilha carregada como rascunho. Cole os vídeos e publique.');
   } catch (e) { toast(friendlyError(e)); }
 };
+
+/* reduz a imagem no navegador e devolve um data URL JPEG (cabe no Firestore) */
+async function shrinkImage(file) {
+  if (!/^image\/(jpeg|png|webp|gif)$/.test(file.type)) throw new Error('formato não suportado');
+  if (file.size > 15 * 1024 * 1024) throw new Error('arquivo grande demais (máx. 15 MB)');
+  const bmp = await createImageBitmap(file);
+  let maxW = 1600, q = 0.82, out = '';
+  for (let k = 0; k < 6; k++) {
+    const sc = Math.min(1, maxW / bmp.width);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(bmp.width * sc)); c.height = Math.max(1, Math.round(bmp.height * sc));
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, 0, 0, c.width, c.height);
+    out = c.toDataURL('image/jpeg', q);
+    if (out.length < 600000) return out;
+    maxW = Math.round(maxW * 0.8); q = Math.max(0.6, q - 0.05);
+  }
+  throw new Error('não consegui reduzir o bastante');
+}
 
 function lessonModal(l, kindDefault, moduleDefault, newModule) {
   const isNew = !l;
@@ -230,6 +253,13 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
       </div>
       <label>Título <input id="m-title" required value="${esc(l ? l.title : '')}"></label>
       <label>Descrição <textarea id="m-desc">${esc(l ? l.description : '')}</textarea></label>
+      <div class="img-up">
+        <b>Imagens</b>
+        <span class="hint">Opcional. A aluna vê as imagens direto na página, na ordem abaixo, sem precisar baixar. Formatos JPG, PNG ou WebP. Elas são reduzidas automaticamente.</span>
+        <div id="m-imgs" class="img-list"></div>
+        <div class="btn-row"><label class="btn btn-ghost small img-pick">+ Adicionar imagens<input type="file" id="m-imgfile" accept="image/*" multiple hidden></label></div>
+        <div id="m-imgmsg" class="msg err" hidden></div>
+      </div>
       <div id="m-act" class="sub-grid" ${kind === 'atividade' ? '' : 'hidden'}>
         <label>Texto da atividade <span class="hint">Instruções, perguntas, exemplos. Linhas começando com "- " viram lista, "1. " lista numerada, "## " subtítulo e **texto** fica em negrito.</span>
           <textarea id="m-body" rows="9">${esc(l ? l.body : '')}</textarea></label>
@@ -374,6 +404,45 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
     }
     return out;
   };
+
+  /* ---- imagens da aula/atividade ---- */
+  const imgs = []; // {id, data, isNew}
+  const removedImgs = [];
+  const drawImgs = () => {
+    $('m-imgs').innerHTML = imgs.map((im, i) => `
+      <div class="img-item" data-i="${i}">
+        <img src="${im.data}" alt="Imagem ${i + 1}">
+        <div class="img-ops">
+          <button type="button" class="link-btn" data-iop="up" ${i === 0 ? 'disabled' : ''}>Subir</button>
+          <button type="button" class="link-btn" data-iop="down" ${i === imgs.length - 1 ? 'disabled' : ''}>Descer</button>
+          <button type="button" class="link-btn danger" data-iop="rm">Remover</button>
+        </div>
+      </div>`).join('');
+  };
+  $('m-imgs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-iop]'); if (!b) return;
+    const i = Number(b.closest('.img-item').dataset.i), op = b.dataset.iop;
+    if (op === 'rm') { const [r] = imgs.splice(i, 1); if (!r.isNew) removedImgs.push(r.id); }
+    else { const j = op === 'up' ? i - 1 : i + 1; if (j >= 0 && j < imgs.length) [imgs[i], imgs[j]] = [imgs[j], imgs[i]]; }
+    drawImgs();
+  });
+  $('m-imgfile').addEventListener('change', async (e) => {
+    const files = [...e.target.files]; e.target.value = '';
+    const msg = $('m-imgmsg'); msg.hidden = true;
+    for (const f of files) {
+      if (imgs.length >= 12) { flash(msg, 'Máximo de 12 imagens por etapa.', 'err'); break; }
+      try { imgs.push({ id: newId(), data: await shrinkImage(f), isNew: true }); }
+      catch (err) { flash(msg, `Não consegui usar "${f.name}": ${err.message}`, 'err'); }
+    }
+    drawImgs();
+  });
+  if (l && Array.isArray(l.images) && l.images.length) {
+    $('m-imgmsg').hidden = false; $('m-imgmsg').className = 'msg'; $('m-imgmsg').textContent = 'Carregando imagens...';
+    Promise.all(l.images.map((id) => getDoc(doc(db, 'lessonImages', id)))).then((snaps) => {
+      snaps.forEach((s) => { if (s.exists()) imgs.push({ id: s.id, data: s.data().data, isNew: false }); });
+      $('m-imgmsg').hidden = true; $('m-imgmsg').className = 'msg err'; drawImgs();
+    }).catch((err) => flash($('m-imgmsg'), friendlyError(err), 'err'));
+  }
   $('m-kind').addEventListener('change', () => { $('m-act').hidden = $('m-kind').value !== 'atividade'; });
   $('m-cancel').onclick = closeModal;
 
@@ -397,12 +466,19 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
     if (data.pdfUrl && !safeUrl(data.pdfUrl)) { flash($('m-msg'), 'O link do PDF não parece válido.', 'err'); return; }
     if (data.linkUrl && !safeUrl(data.linkUrl)) { flash($('m-msg'), 'O link do material não parece válido.', 'err'); return; }
     try {
+      if ($('m-imgmsg').textContent === 'Carregando imagens...' && !$('m-imgmsg').hidden) { flash($('m-msg'), 'Aguarde as imagens terminarem de carregar.', 'err'); return; }
+      const ref = isNew ? doc(collection(db, 'lessons')) : doc(db, 'lessons', l.id);
+      data.images = imgs.map((x) => x.id);
+      const b = writeBatch(db);
+      imgs.forEach((im, i) => { if (im.isNew) b.set(doc(db, 'lessonImages', im.id), { lessonId: ref.id, data: im.data, createdAt: serverTimestamp() }); });
+      removedImgs.forEach((id) => b.delete(doc(db, 'lessonImages', id)));
       if (isNew) {
         const order = S.lessons.reduce((m, x) => Math.max(m, x.order || 0), 0) + 1;
-        await addDoc(collection(db, 'lessons'), { ...data, order, createdAt: serverTimestamp() });
+        b.set(ref, { ...data, order, createdAt: serverTimestamp() });
       } else {
-        await updateDoc(doc(db, 'lessons', l.id), data);
+        b.update(ref, data);
       }
+      await b.commit();
       closeModal(); toast('Salvo.');
     } catch (err) { flash($('m-msg'), friendlyError(err), 'err'); }
   });
