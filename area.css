@@ -625,3 +625,46 @@ body.embarque .ticket-card, body.embarque .modal .box { color: var(--ink); }
 .img-zoom img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
 .img-up > b { font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 500; color: var(--ink-soft, #6b4a55); }
 .img-up > .hint { font-size: .78rem; line-height: 1.4; opacity: .75; }
+
+/* v15: icones aula/atividade, legenda, passaporte */
+.side-home.is-on { background: rgba(228, 220, 214, .14); color: #fff; }
+.side-item .si.k-aula { color: #9fc4ff; }
+.side-item .si.k-ativ { color: #f0b46a; }
+.side-item.locked .si.k-aula, .side-item.locked .si.k-ativ { color: rgba(228, 220, 214, .4); }
+.side-item .sst { width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px; color: rgba(228, 220, 214, .4); }
+.side-item .sst svg { width: 16px; height: 16px; }
+.side-item .sst.ok { color: #7fd09a; }
+.side-item.done .si.k-aula, .side-item.done .si.k-ativ { color: rgba(228, 220, 214, .75); }
+.side-legend { display: flex; gap: 16px; margin-top: 12px; padding: 10px 8px 0; border-top: 1px dashed rgba(228, 220, 214, .2); font-size: 12px; color: rgba(228, 220, 214, .65); }
+.side-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.side-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.side-legend .k-aula { background: #9fc4ff; }
+.side-legend .k-ativ { background: #f0b46a; }
+
+.passport { background: #f6efe6; color: #4F0C22; border-radius: 18px; padding: 26px 24px 30px; border: 1px solid rgba(79, 12, 34, .25); box-shadow: inset 0 0 0 6px #f6efe6, inset 0 0 0 7px rgba(79, 12, 34, .35); }
+.pp-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; border-bottom: 2px solid rgba(79, 12, 34, .5); padding-bottom: 12px; }
+.pp-head small { letter-spacing: .22em; text-transform: uppercase; font-size: 11px; color: #a1304a; font-weight: 600; }
+.pp-head h2 { margin: 2px 0 0; font-family: 'Playfair Display', serif; font-weight: 500; font-size: 34px; }
+.pp-count { text-align: right; line-height: 1.1; }
+.pp-count b { font-family: 'Playfair Display', serif; font-size: 40px; font-weight: 500; display: block; }
+.pp-count span { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .7; }
+.pp-sub { margin: 14px 0 22px; font-size: 15px; opacity: .8; }
+.stamps { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 24px 18px; }
+.slot { text-align: center; }
+.stamp { width: 100%; max-width: 190px; aspect-ratio: 1; margin: 0 auto; display: grid; place-items: center; transform: rotate(var(--rot, 0deg)); }
+.stamp-svg { width: 100%; height: 100%; color: #a1304a; mix-blend-mode: multiply; opacity: .92; }
+.stamp-svg .s-ring1 { fill: none; stroke: currentColor; stroke-width: 4; }
+.stamp-svg .s-ring2 { fill: none; stroke: currentColor; stroke-width: 1.4; }
+.stamp-svg text { fill: currentColor; font-family: 'Jost', sans-serif; font-weight: 600; letter-spacing: .12em; }
+.stamp-svg .s-sub { font-size: 9px; letter-spacing: .3em; }
+.stamp-svg .s-date { font-size: 11px; letter-spacing: .1em; }
+.stamp-svg .s-star { font-size: 12px; }
+.stamp.empty { border: 2px dashed rgba(79, 12, 34, .3); border-radius: 50%; transform: none; max-width: 170px; }
+.stamp.empty span { font-family: 'Playfair Display', serif; font-size: 44px; color: rgba(79, 12, 34, .2); }
+.slot .cap { margin-top: 10px; display: grid; gap: 2px; }
+.slot .cap b { font-family: 'Playfair Display', serif; font-weight: 500; font-size: 16px; }
+.slot .cap span { font-size: 12px; opacity: .65; }
+.slot:not(.has) .cap b { opacity: .55; }
+.slot.is-new .stamp { animation: stampIn .7s cubic-bezier(.2, 1.3, .4, 1) both; }
+@keyframes stampIn { 0% { transform: rotate(var(--rot)) scale(2.2); opacity: 0; } 60% { opacity: 1; } 100% { transform: rotate(var(--rot)) scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .slot.is-new .stamp { animation: none; } }

@@ -9,7 +9,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp, accessInfo, fmtDMY
-} from './cj-utils.js?v=14';
+} from './cj-utils.js?v=15';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -17,7 +17,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', signups: [], openEv: null, joining: false, rpError: '', editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', doneAt: {}, newStamp: '', tab: 'trilha', signups: [], openEv: null, joining: false, rpError: '', editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -26,6 +26,8 @@ const ICON = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
   task: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V7a2 2 0 012-2h9"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
+  aula: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l6-3.5z" fill="currentColor"/></svg>',
+  ativ: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19.5 8.5a2.1 2.1 0 00-3-3L5 17z"/><path d="M14.5 7.5l3 3"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
 };
 
@@ -86,7 +88,7 @@ function cleanup() {
   clearInterval(state.accessTimer);
   state.unsubs.forEach((u) => u());
   state.unsubs = [];
-  state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.notes = {}; state.signups = []; state.openEv = null; state.editingSub = false;
+  state.lessons = []; state.events = []; state.completed = {}; state.subs = {}; state.notes = {}; state.doneAt = {}; state.newStamp = ''; state.signups = []; state.openEv = null; state.editingSub = false;
   state.openLesson = null;
   const sl = $('s-lesson'); sl.innerHTML = ''; sl.dataset.lessonId = ''; sl.dataset.mediaKey = ''; sl.dataset.infoKey = ''; sl.dataset.subKey = '';
 }
@@ -196,6 +198,7 @@ function startApp() {
 
   state.unsubs.push(onSnapshot(doc(db, 'progress', uid), (snap) => {
     state.completed = (snap.exists() && snap.data().completed) || {};
+    state.doneAt = (snap.exists() && snap.data().doneAt) || {};
     render();
   }, onErr));
 
@@ -208,6 +211,8 @@ function setTab(which) {
   $('tab-trilha').setAttribute('aria-selected', which === 'trilha');
   $('tab-cal').setAttribute('aria-selected', which === 'cal');
   $('tab-mat').setAttribute('aria-selected', which === 'mat');
+  $('tab-pass').setAttribute('aria-selected', which === 'pass');
+  $('p-pass').hidden = which !== 'pass';
   $('p-trilha').hidden = which !== 'trilha';
   $('p-cal').hidden = which !== 'cal';
   $('p-mat').hidden = which !== 'mat';
@@ -216,7 +221,8 @@ function setTab(which) {
 }
 $('tab-trilha').addEventListener('click', () => setTab('trilha'));
 $('tab-cal').addEventListener('click', () => { setTab('cal'); renderCal(); });
-$('tab-mat').addEventListener('click', () => { setTab('mat'); renderMaterial(); });
+$('tab-mat').addEventListener('click', () => { setTab('mat'); renderMaterial(); render(); });
+$('tab-pass').addEventListener('click', () => { setTab('pass'); render(); });
 
 function showHome() {
   state.openLesson = null;
@@ -235,9 +241,78 @@ function render() {
   renderSide();
   const nm = Object.values(state.notes).filter((n) => n.note || (n.answers && n.answers.length)).length;
   $('side-mat').innerHTML = `Material de apoio${nm ? ` <small>${nm}</small>` : ''}`;
+  const mods = passportModules();
+  const got = mods.filter((m) => m.complete).length;
+  $('side-pass').innerHTML = `Meu passaporte${mods.length ? ` <small>${got}/${mods.length}</small>` : ''}`;
+  const home = !state.openLesson;
+  $('side-home').classList.toggle('is-on', home && state.tab === 'trilha');
+  $('side-mat').classList.toggle('is-on', home && state.tab === 'mat');
+  $('side-pass').classList.toggle('is-on', home && state.tab === 'pass');
   if (state.openLesson) { renderLesson(); return; }
   renderTrail();
   renderMaterial();
+  renderPassport(mods);
+}
+
+/* ============================================================
+   Passaporte: um carimbo por modulo concluido
+   ============================================================ */
+function passportModules(completed = state.completed, doneAt = state.doneAt) {
+  const map = new Map();
+  computeTrail(state.lessons, completed).forEach((l) => {
+    const k = (l.module || 'Sem módulo').trim() || 'Sem módulo';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(l);
+  });
+  return [...map.entries()].map(([name, items]) => {
+    const done = items.filter((i) => i.done).length;
+    const complete = items.length > 0 && done === items.length;
+    const stamps = items.map((i) => doneAt && doneAt[i.id]).filter(Boolean);
+    const when = complete && stamps.length === items.length ? Math.max(...stamps) : null;
+    return { name, total: items.length, done, complete, when };
+  });
+}
+
+const STAMP_ROT = [-8, 5, -4, 9, -6, 3];
+const MON = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
+function stampSvg(m, i) {
+  let nm = m.name.replace(/[^\p{L}\p{N}\s\-.,:&]/gu, '').replace(/\s+/g, ' ').trim().toUpperCase() || 'MÓDULO';
+  if (nm.length > 24) nm = nm.slice(0, 23).trim() + '…';
+  const fs = nm.length <= 12 ? 16 : nm.length <= 18 ? 13 : 11;
+  let date = '';
+  if (m.when) { const d = new Date(m.when - 3 * 3600e3); date = `${String(d.getUTCDate()).padStart(2, '0')} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+  return `<svg class="stamp-svg" viewBox="0 0 200 200" role="img" aria-label="Carimbo do módulo ${esc(m.name)}">
+    <defs><path id="sp${i}t" d="M 30,100 A 70,70 0 0 1 170,100"/><path id="sp${i}b" d="M 22,100 A 78,78 0 0 0 178,100"/></defs>
+    <circle cx="100" cy="100" r="94" class="s-ring1"/><circle cx="100" cy="100" r="87" class="s-ring2"/><circle cx="100" cy="100" r="50" class="s-ring2"/>
+    <text class="s-name" font-size="${fs}"><textPath href="#sp${i}t" startOffset="50%" text-anchor="middle">${esc(nm)}</textPath></text>
+    <text class="s-sub" font-size="10"><textPath href="#sp${i}b" startOffset="50%" text-anchor="middle">CLOSER JOURNEY</textPath></text>
+    <g class="s-plane" transform="translate(100 92) scale(1.5) translate(-12 -12)"><path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 00-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z" fill="currentColor"/></g>
+    ${date ? `<text x="100" y="128" class="s-date" text-anchor="middle">${date}</text>` : '<text x="100" y="128" class="s-date" text-anchor="middle">CONCLUÍDO</text>'}
+    <text x="30" y="104" class="s-star">★</text><text x="170" y="104" class="s-star" text-anchor="end">★</text>
+  </svg>`;
+}
+
+function renderPassport(mods) {
+  const box = $('pass-body');
+  if (!box) return;
+  const got = mods.filter((m) => m.complete).length;
+  if (!mods.length) { box.innerHTML = '<div class="empty">Seu passaporte aparece quando os módulos da jornada forem publicados.</div>'; return; }
+  const all = got === mods.length;
+  const fresh = state.newStamp;
+  box.innerHTML = `
+    <div class="passport">
+      <div class="pp-head">
+        <div><small>Closer Journey</small><h2>Passaporte</h2></div>
+        <div class="pp-count"><b>${got}</b><span>de ${mods.length} carimbo${mods.length > 1 ? 's' : ''}</span></div>
+      </div>
+      <p class="pp-sub">${all ? 'Passaporte completo! Você percorreu toda a jornada.' : 'Cada módulo finalizado vira um carimbo. Conclua todas as etapas de um módulo para conquistar o próximo.'}</p>
+      <div class="stamps">
+        ${mods.map((m, i) => m.complete
+          ? `<div class="slot has${fresh === m.name ? ' is-new' : ''}"><div class="stamp" style="--rot:${STAMP_ROT[i % 6]}deg">${stampSvg(m, i)}</div><div class="cap"><b>${esc(m.name)}</b><span>${m.done}/${m.total} etapas</span></div></div>`
+          : `<div class="slot"><div class="stamp empty"><span>${i + 1}</span></div><div class="cap"><b>${esc(m.name)}</b><span>${m.done}/${m.total} etapas${m.done ? '' : ' · a conquistar'}</span></div></div>`).join('')}
+      </div>
+    </div>`;
+  if (fresh && state.tab === 'pass') state.newStamp = '';
 }
 
 /* ---------- menu lateral (montado a partir dos modulos e aulas publicados) ---------- */
@@ -262,17 +337,19 @@ function renderSide() {
 
 function sideItem(l) {
   const cls = [l.done ? 'done' : '', l.current ? 'current' : '', !l.unlocked ? 'locked' : '', state.openLesson === l.id ? 'active' : ''].join(' ');
-  const ico = l.done ? ICON.check : !l.unlocked ? ICON.lock : l.kind === 'atividade' ? ICON.task : ICON.play;
+  const ativ = l.kind === 'atividade';
+  const st = l.done ? `<span class="sst ok" title="Finalizada">${ICON.check}</span>` : !l.unlocked ? `<span class="sst" title="Bloqueada">${ICON.lock}</span>` : '';
   return `<li><button type="button" class="side-item ${cls}" ${l.unlocked ? `data-open="${esc(l.id)}"` : 'disabled aria-disabled="true"'}>
-    <span class="si">${ico}</span><span class="tt">${esc(l.title)}</span></button></li>`;
+    <span class="si ${ativ ? 'k-ativ' : 'k-aula'}" title="${ativ ? 'Atividade' : 'Aula'}">${ativ ? ICON.ativ : ICON.aula}</span><span class="tt">${esc(l.title)}</span>${st}</button></li>`;
 }
 
 document.addEventListener('click', (e) => {
   const m = e.target.closest('[data-mod]');
   if (m) { state.collapsed[m.dataset.mod] = !state.collapsed[m.dataset.mod]; renderSide(); }
 });
-$('side-home').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); });
-$('side-mat').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('mat'); renderMaterial(); window.scrollTo(0, 0); });
+$('side-home').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('trilha'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('side-pass').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('pass'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('side-mat').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('mat'); renderMaterial(); render(); window.scrollTo(0, 0); });
 $('side-toggle').addEventListener('click', () => {
   const open = document.body.classList.toggle('side-open');
   $('side-toggle').setAttribute('aria-expanded', open);
@@ -913,17 +990,21 @@ async function submitAnswer(l) {
 }
 
 async function setDone(id, value, next) {
-  const prev = { ...state.completed };
-  const nextMap = { ...state.completed };
-  if (value) nextMap[id] = true; else delete nextMap[id];
-  state.completed = nextMap;
+  const prev = { ...state.completed }, prevAt = { ...state.doneAt };
+  const nextMap = { ...state.completed }, nextAt = { ...state.doneAt };
+  if (value) { nextMap[id] = true; nextAt[id] = Date.now(); } else { delete nextMap[id]; delete nextAt[id]; }
+  const before = new Set(passportModules(prev, prevAt).filter((m) => m.complete).map((m) => m.name));
+  const won = value ? passportModules(nextMap, nextAt).find((m) => m.complete && !before.has(m.name)) : null;
+  state.completed = nextMap; state.doneAt = nextAt;
+  if (won) state.newStamp = won.name;
   render();
   try {
-    await setDoc(doc(db, 'progress', state.user.uid), { completed: nextMap, updatedAt: serverTimestamp() }, { mergeFields: ['completed', 'updatedAt'] });
-    if (value) toast(next ? 'Etapa finalizada! A próxima foi liberada.' : 'Etapa finalizada!');
+    await setDoc(doc(db, 'progress', state.user.uid), { completed: nextMap, doneAt: nextAt, updatedAt: serverTimestamp() }, { mergeFields: ['completed', 'doneAt', 'updatedAt'] });
+    if (won) toast(`Novo carimbo no seu passaporte: ${won.name}!`);
+    else if (value) toast(next ? 'Etapa finalizada! A próxima foi liberada.' : 'Etapa finalizada!');
   } catch (e) {
     console.error(e);
-    state.completed = prev; render();
+    state.completed = prev; state.doneAt = prevAt; state.newStamp = ''; render();
     toast(friendlyError(e));
   }
 }

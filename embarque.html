@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=14">
+<link rel="stylesheet" href="area.css?v=15">
 </head>
 <body class="area embarque">
 
@@ -76,7 +76,9 @@
         <div class="side-title">Sua jornada</div>
         <button class="side-home" id="side-home" type="button">Visão geral</button>
         <button class="side-home" id="side-mat" type="button">Material de apoio</button>
+        <button class="side-home" id="side-pass" type="button">Meu passaporte</button>
         <div id="side-list"></div>
+        <div class="side-legend" aria-hidden="true"><span><i class="k-aula"></i>Aula</span><span><i class="k-ativ"></i>Atividade</span></div>
       </div>
     </aside>
     <div class="a-main">
@@ -92,6 +94,7 @@
         <button class="tab" role="tab" id="tab-trilha" aria-selected="true">Minha jornada</button>
         <button class="tab" role="tab" id="tab-cal" aria-selected="false">Calendário de encontros</button>
         <button class="tab" role="tab" id="tab-mat" aria-selected="false">Material de apoio</button>
+        <button class="tab" role="tab" id="tab-pass" aria-selected="false">Meu passaporte</button>
       </div>
 
       <div id="p-trilha">
@@ -102,6 +105,10 @@
         <div id="next-up"></div>
         <div id="export-all"></div>
         <div id="trail"></div>
+      </div>
+
+      <div id="p-pass" hidden>
+        <div id="pass-body"></div>
       </div>
 
       <div id="p-mat" hidden>
@@ -142,6 +149,6 @@
 <div class="modal" id="ev-modal" hidden><div class="box" id="ev-box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="embarque.js?v=14"></script>
+<script type="module" src="embarque.js?v=15"></script>
 </body>
 </html>
