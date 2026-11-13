@@ -10,15 +10,15 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
-  genDates, renderCalendar, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
-} from './cj-utils.js?v=15';
+  parseTs, fmtTs, chaptersFromTranscript, parseChapters, chaptersToText, genDates, renderCalendar, birthdayEvents, EVENT_TYPES_PICK, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
+} from './cj-utils.js?v=16';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
 const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
-const S = { lessons: [], events: [], signups: [], progress: {}, dFilter: 'all', dSort: 'access', signups0: 0, evOpen: null, students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
+const S = { lessons: [], events: [], signups: [], questions: [], birthdays: [], hotseats: [], progress: {}, dFilter: 'all', dSort: 'access', signups0: 0, evOpen: null, students: [], subs: [], subFilter: 'pend', unsubs: [], calYear: 0, calMonth: 0 };
 
 let toastTimer;
 function toast(msg) {
@@ -82,6 +82,18 @@ function start() {
     S.signups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     renderEvSignups();
   }, onErr));
+  S.unsubs.push(onSnapshot(collection(db, 'hotseats'), (snap) => {
+    S.hotseats = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((x, y) => String(y.date || '').localeCompare(String(x.date || '')));
+    renderHotseats();
+  }, onErr));
+  S.unsubs.push(onSnapshot(collection(db, 'eventQuestions'), (snap) => {
+    S.questions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderEvQuestions();
+  }, onErr));
+  S.unsubs.push(onSnapshot(collection(db, 'birthdays'), (snap) => {
+    S.birthdays = snap.docs.map((d) => d.data());
+    renderCal();
+  }, onErr));
   S.unsubs.push(onSnapshot(collection(db, 'progress'), (snap) => {
     const m = {}; snap.docs.forEach((d) => { m[d.id] = d.data(); }); S.progress = m;
     renderDash();
@@ -103,7 +115,7 @@ function start() {
 /* ---------- abas ---------- */
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-selected', x === t));
-  ['aulas', 'cal', 'corr', 'dash', 'alunas'].forEach((k) => ($('t-' + k).hidden = k !== t.dataset.tab));
+  ['aulas', 'cal', 'corr', 'dash', 'hot', 'alunas'].forEach((k) => ($('t-' + k).hidden = k !== t.dataset.tab));
 }));
 
 /* ============================================================
@@ -281,13 +293,14 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
             <div class="btn-row"><button class="btn btn-primary small" type="button" id="q-imp-go">Adicionar à lista</button></div>
           </div>
         </div>
-        <label class="check"><input type="checkbox" id="m-fb" ${l && l.feedbackEnabled ? 'checked' : ''}> Permitir feedback da Cris <span class="hint">Toda atividade tem um campo para a aluna responder. Marque aqui se você vai corrigir e devolver os pontos de melhoria.</span></label>
+        <label class="check"><input type="checkbox" id="m-fb" ${l && l.feedbackEnabled ? 'checked' : ''}> Permitir correção e feedback <span class="hint">Toda atividade tem um campo para a aluna responder. Marque aqui se você vai corrigir e devolver os pontos de melhoria.</span></label>
       </div>
       <label>Link do vídeo <span class="hint">Google Drive, YouTube (pode ser não listado) ou Vimeo</span>
         <input id="m-video" value="${esc(l ? l.videoUrl : '')}" placeholder="https://youtu.be/..."></label>
       <div id="m-vcheck" class="msg" hidden></div>
       <label>Link do material ou da atividade <span class="hint">Notion, Google Docs, formulário... (opcional)</span>
         <input id="m-link" value="${esc(l ? l.linkUrl : '')}" placeholder="https://"></label>
+      <label class="check"><input type="checkbox" id="m-indep" ${l && l.independent ? 'checked' : ''}> Sem dependência <span class="hint">A aluna pode abrir a qualquer momento, sem finalizar as etapas anteriores. Não trava as próximas e não conta no progresso nem no carimbo.</span></label>
       <label class="check"><input type="checkbox" id="m-pub" ${!l || l.published ? 'checked' : ''}> Publicada (visível para as alunas)</label>
       <div id="m-msg" class="msg err" hidden></div>
       <div class="foot">
@@ -455,7 +468,8 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
       description: $('m-desc').value.trim(),
       videoUrl: $('m-video').value.trim(),
       linkUrl: $('m-link').value.trim(),
-      published: $('m-pub').checked
+      published: $('m-pub').checked,
+      independent: $('m-indep').checked
     };
     const isAct = data.kind === 'atividade';
     data.body = isAct ? $('m-body').value.trim() : '';
@@ -485,13 +499,84 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
 }
 
 /* ============================================================
+   Hotseats gravados
+   ============================================================ */
+function renderHotseats() {
+  const box = $('hs-list'); if (!box) return;
+  if (!S.hotseats.length) { box.innerHTML = '<div class="empty">Nenhum hotseat cadastrado ainda.</div>'; return; }
+  box.innerHTML = `<ul class="a-list">${S.hotseats.map((h) => `
+    <li class="a-item ${h.published ? '' : 'draft'}" data-hs="${esc(h.id)}"><div class="move"></div>
+      <div><div class="t">${esc(h.title)} <span class="badge ${h.published ? 'on' : 'off'}">${h.published ? 'Publicado' : 'Rascunho'}</span></div>
+        <div class="m">${esc(fmtDMY(h.date || ''))} · ${(h.chapters || []).length} marcador${(h.chapters || []).length === 1 ? '' : 'es'}${h.transcript ? ' · com transcrição' : ''}</div></div>
+      <div class="acts"><button class="btn btn-ghost small" data-edit="1" type="button">Editar</button><button class="btn danger small" data-del="1" type="button">Excluir</button></div>
+    </li>`).join('')}</ul>`;
+}
+$('hs-list').addEventListener('click', async (e) => {
+  const row = e.target.closest('[data-hs]'); if (!row) return;
+  const h = S.hotseats.find((x) => x.id === row.dataset.hs); if (!h) return;
+  if (e.target.closest('[data-edit]')) hotseatModal(h);
+  if (e.target.closest('[data-del]') && confirm(`Excluir o hotseat "${h.title}"?`)) {
+    try { await deleteDoc(doc(db, 'hotseats', h.id)); toast('Hotseat excluído.'); } catch (err) { toast(friendlyError(err)); }
+  }
+});
+$('new-hs').onclick = () => hotseatModal(null);
+
+function hotseatModal(h) {
+  const isNew = !h;
+  $('box').classList.add('wide');
+  openModal(`
+    <h3>${isNew ? 'Novo hotseat' : 'Editar hotseat'}</h3>
+    <p class="sub">Cole o link da gravação (Google Drive, YouTube ou Vimeo), a data em que o hotseat aconteceu, a transcrição e a minutagem.</p>
+    <form id="h-form" class="f">
+      <div class="row">
+        <label>Título <input id="h-title" required value="${esc(h ? h.title : '')}" placeholder="Ex.: Hotseat com a Ana"></label>
+        <label>Data em que aconteceu <input id="h-date" type="date" required value="${esc(h ? h.date : todayKey())}"></label>
+      </div>
+      <label>Link da gravação <input id="h-video" required value="${esc(h ? h.videoUrl : '')}" placeholder="https://..."></label>
+      <div id="h-vcheck" class="msg" hidden></div>
+      <label>Transcrição da reunião <span class="hint">Cole o texto completo. Se as linhas começarem com o horário (ex.: "[00:12:30] Ana: ..."), a minutagem pode ser gerada automaticamente.</span>
+        <textarea id="h-trans" rows="9">${esc(h ? h.transcript || '' : '')}</textarea></label>
+      <label>Minutagem <span class="hint">Uma linha por marcador: "mm:ss Título" (ou "hh:mm:ss Título"). A aluna clica e o vídeo pula para o ponto (YouTube e Vimeo).</span>
+        <textarea id="h-chap" rows="7" placeholder="00:00 Abertura&#10;12:30 Primeira dúvida&#10;41:10 Fechamento">${esc(h ? chaptersToText(h.chapters) : '')}</textarea></label>
+      <div class="btn-row"><button class="btn btn-ghost small" type="button" id="h-auto">Gerar minutagem a partir da transcrição</button><span class="hint" id="h-autoinfo"></span></div>
+      <label class="check"><input type="checkbox" id="h-pub" ${!h || h.published ? 'checked' : ''}> Publicado (visível para as alunas)</label>
+      <div id="h-msg" class="msg err" hidden></div>
+      <div class="foot"><span></span><div class="btn-row"><button class="btn btn-ghost small" type="button" id="h-cancel">Cancelar</button><button class="btn btn-primary small" type="submit">Salvar</button></div></div>
+    </form>`);
+  $('h-cancel').onclick = closeModal;
+  $('h-auto').onclick = () => {
+    const list = chaptersFromTranscript($('h-trans').value);
+    if (!list.length) { $('h-autoinfo').textContent = 'Não encontrei horários no começo das linhas da transcrição. Preencha a minutagem à mão.'; return; }
+    if ($('h-chap').value.trim() && !confirm('Substituir a minutagem atual pela gerada automaticamente?')) return;
+    $('h-chap').value = chaptersToText(list);
+    $('h-autoinfo').textContent = `${list.length} marcadores gerados (um a cada 5 minutos). Revise os títulos se quiser.`;
+  };
+  $('h-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const videoUrl = $('h-video').value.trim();
+    if (!parseVideo(videoUrl) || !safeUrl(videoUrl)) { flash($('h-msg'), 'O link da gravação não parece válido.', 'err'); return; }
+    const data = {
+      title: $('h-title').value.trim(), date: $('h-date').value, videoUrl,
+      transcript: $('h-trans').value.trim(), chapters: parseChapters($('h-chap').value),
+      published: $('h-pub').checked
+    };
+    try {
+      if (isNew) await addDoc(collection(db, 'hotseats'), { ...data, createdAt: serverTimestamp() });
+      else await updateDoc(doc(db, 'hotseats', h.id), data);
+      closeModal(); toast('Hotseat salvo.');
+    } catch (err) { flash($('h-msg'), friendlyError(err), 'err'); }
+  });
+}
+
+/* ============================================================
    Calendario: cadastro em lote
    ============================================================ */
 const bulkVals = () => ({
   title: $('b-title').value.trim(), type: $('b-type').value, start: $('b-start').value,
   time: $('b-time').value, dur: Number($('b-dur').value) || 60, wd: Number($('b-wd').value),
   step: Number($('b-step').value), count: Math.max(1, Math.min(60, Number($('b-count').value) || 1)),
-  link: $('b-link').value.trim(), notes: $('b-notes').value.trim()
+  link: $('b-link').value.trim(), notes: $('b-notes').value.trim(),
+  rules: $('b-rules').value.trim(), q: $('b-q').checked
 });
 
 function updatePreview() {
@@ -519,7 +604,7 @@ $('bulk-form').addEventListener('submit', async (e) => {
     const b = writeBatch(db);
     dates.forEach((d) => b.set(doc(collection(db, 'events')), {
       title: v.title, type: v.type, start: Timestamp.fromDate(fromBr(d, v.time)),
-      durationMin: v.dur, link: v.link, notes: v.notes, seriesId, createdAt: serverTimestamp()
+      durationMin: v.dur, link: v.link, notes: v.notes, rules: v.rules, questionsEnabled: v.q, seriesId, createdAt: serverTimestamp()
     }));
     await b.commit();
     flash(msg, `${dates.length} encontros criados. Eles já aparecem no calendário das alunas.`, 'ok');
@@ -535,7 +620,7 @@ function renderCal() {
   $('cal-title').textContent = monthLabel(S.calYear, S.calMonth);
   $('cal').innerHTML = renderCalendar({
     year: S.calYear, month: S.calMonth, today: todayKey(),
-    events: eventsOfMonth(S.events, S.calYear, S.calMonth)
+    events: eventsOfMonth([...S.events, ...birthdayEvents(S.birthdays, S.calYear)], S.calYear, S.calMonth)
   });
 }
 $('cal-prev').onclick = () => { S.calMonth--; if (S.calMonth < 0) { S.calMonth = 11; S.calYear--; } renderCal(); };
@@ -547,7 +632,19 @@ $('cal').addEventListener('click', (e) => {
 });
 $('one-ev').onclick = () => eventModal(null);
 
-const RP_LABEL = { closer: 'Closer', cliente: 'Cliente', observadora: 'Observadora' };
+const RP_LABEL = { closer: 'Closer', cliente: 'Cliente', observadora: 'Observadora', participante: 'Participante' };
+function renderEvQuestions() {
+  const box = document.getElementById('e-questions');
+  if (!box || !S.evOpen) return;
+  const ev = S.events.find((x) => x.id === S.evOpen);
+  const list = S.questions.filter((x) => x.eventId === S.evOpen).sort((x, y) => ((x.createdAt && x.createdAt.seconds) || 0) - ((y.createdAt && y.createdAt.seconds) || 0));
+  if (!(ev && ev.questionsEnabled) && !list.length) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="rp-h">Dúvidas das alunas (${list.length})</div>` + (list.length
+    ? list.map((q) => `<div class="rp-row q-row"><b>${esc(q.name || 'Aluna')}</b><span>${esc(q.text)} <button class="link-btn" type="button" data-rmq="${esc(q.id)}">remover</button></span></div>`).join('')
+    : '<div class="rp-row"><span class="rp-empty">Nenhuma dúvida enviada ainda.</span></div>');
+  box.querySelectorAll('[data-rmq]').forEach((b) => { b.onclick = async () => { if (confirm('Remover esta dúvida?')) { try { await deleteDoc(doc(db, 'eventQuestions', b.dataset.rmq)); } catch (err) { toast(friendlyError(err)); } } }; });
+}
 function renderEvSignups() {
   const box = document.getElementById('e-signups');
   if (!box || !S.evOpen) return;
@@ -555,7 +652,7 @@ function renderEvSignups() {
   const row = (role) => {
     const items = list.filter((x) => x.role === role);
     if (!items.length) return `<div class="rp-row"><b>${RP_LABEL[role]}</b><span class="rp-empty">${role === 'observadora' ? 'Nenhuma inscrita' : 'Vaga livre'}</span></div>`;
-    return `<div class="rp-row"><b>${RP_LABEL[role]}</b><span>${items.map((x) => `${esc(x.name || 'Aluna')} <button class="link-btn" type="button" data-rmsign="${esc(x.id)}" title="Remover inscrição">remover</button>`).join(' · ')}</span></div>`;
+    return `<div class="rp-row"><b>${RP_LABEL[role]}</b><span>${items.map((x) => `${esc(x.name || 'Aluna')}${x.product ? ` <em>(produto: ${esc(x.product)}; quem compra: ${esc(x.persona || '')})</em>` : ''} <button class="link-btn" type="button" data-rmsign="${esc(x.id)}" title="Remover inscrição">remover</button>`).join(' · ')}</span></div>`;
   };
   box.innerHTML = `<div class="rp-h">Inscrições no roleplay</div>${row('closer')}${row('cliente')}${row('observadora')}`;
   box.querySelectorAll('[data-rmsign]').forEach((b) => {
@@ -576,7 +673,7 @@ function eventModal(ev) {
     <form id="e-form" class="f">
       <div class="row">
         <label>Título <input id="e-title" required value="${esc(ev ? ev.title : '')}"></label>
-        <label>Tipo <select id="e-type">${Object.entries(EVENT_TYPES).map(([k, t]) =>
+        <label>Tipo <select id="e-type">${Object.entries(EVENT_TYPES).filter(([k]) => EVENT_TYPES_PICK.includes(k)).map(([k, t]) =>
           `<option value="${k}" ${ev && ev.type === k ? 'selected' : ''}>${t.label}</option>`).join('')}</select></label>
       </div>
       <div class="row3">
@@ -586,6 +683,9 @@ function eventModal(ev) {
       </div>
       <label>Link da sala <input id="e-link" value="${esc(ev ? ev.link : '')}" placeholder="https://"></label>
       <label>Observações <textarea id="e-notes">${esc(ev ? ev.notes : '')}</textarea></label>
+      <label>Regras do encontro <span class="hint">Aparece em destaque para a aluna ao abrir o encontro.</span> <textarea id="e-rules">${esc(ev && ev.rules ? ev.rules : '')}</textarea></label>
+      <label class="check"><input type="checkbox" id="e-q" ${ev && ev.questionsEnabled ? 'checked' : ''}> Abrir caixa de dúvidas <span class="hint">Depois de se inscrever, a aluna deixa dúvidas até o dia anterior. Todas as alunas veem as dúvidas.</span></label>
+      ${!isNew ? '<div id="e-questions" class="rp-box" hidden></div>' : ''}
       ${seriesCount > 1 ? `
       <label class="check"><input type="checkbox" id="e-future"> Aplicar este horário também aos próximos encontros da mesma série (mantém as datas deles)</label>` : ''}
       ${!isNew && ev.type === 'roleplay' ? '<div id="e-signups" class="rp-box"></div>' : ''}
@@ -603,7 +703,7 @@ function eventModal(ev) {
     </form>`);
   $('e-cancel').onclick = closeModal;
   S.evOpen = isNew ? null : ev.id;
-  renderEvSignups();
+  renderEvSignups(); renderEvQuestions();
 
   $('e-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -612,7 +712,8 @@ function eventModal(ev) {
     const data = {
       title: $('e-title').value.trim(), type: $('e-type').value,
       start: Timestamp.fromDate(fromBr($('e-date').value, $('e-time').value)),
-      durationMin: Number($('e-dur').value) || 60, link, notes: $('e-notes').value.trim()
+      durationMin: Number($('e-dur').value) || 60, link, notes: $('e-notes').value.trim(),
+      rules: $('e-rules').value.trim(), questionsEnabled: $('e-q').checked
     };
     try {
       if (isNew) {
@@ -625,7 +726,7 @@ function eventModal(ev) {
           S.events.filter((x) => x.seriesId === ev.seriesId && x.id !== ev.id && x.start > ev.start).forEach((x) => {
             b.update(doc(db, 'events', x.id), {
               start: Timestamp.fromDate(fromBr(brParts(x.start).date, $('e-time').value)),
-              durationMin: data.durationMin, link: data.link
+              durationMin: data.durationMin, link: data.link, rules: data.rules, questionsEnabled: data.questionsEnabled
             });
           });
         }
@@ -641,6 +742,7 @@ function eventModal(ev) {
       try {
         const b = writeBatch(db); b.delete(doc(db, 'events', ev.id));
         S.signups.filter((x) => x.eventId === ev.id).forEach((x) => b.delete(doc(db, 'signups', x.id)));
+        S.questions.filter((x) => x.eventId === ev.id).forEach((x) => b.delete(doc(db, 'eventQuestions', x.id)));
         await b.commit(); closeModal(); toast('Encontro excluído.');
       }
       catch (err) { flash($('e-msg'), friendlyError(err), 'err'); }
@@ -653,6 +755,7 @@ function eventModal(ev) {
         const ids = new Set(list.map((x) => x.id));
         const b = writeBatch(db); list.forEach((x) => b.delete(doc(db, 'events', x.id)));
         S.signups.filter((x) => ids.has(x.eventId)).forEach((x) => b.delete(doc(db, 'signups', x.id)));
+        S.questions.filter((x) => ids.has(x.eventId)).forEach((x) => b.delete(doc(db, 'eventQuestions', x.id)));
         await b.commit(); closeModal(); toast('Encontros excluídos.');
       } catch (err) { flash($('e-msg'), friendlyError(err), 'err'); }
     };
@@ -693,8 +796,9 @@ function studentStats(u) {
   const pub = S.lessons.filter((l) => l.published);
   const prog = S.progress[u.id] || {};
   const items = computeTrail(pub, prog.completed || {});
-  const done = items.filter((i) => i.done).length;
-  const total = items.length;
+  const req = items.filter((i) => !i.independent);
+  const done = req.filter((i) => i.done).length;
+  const total = req.length;
   const cur = items.find((i) => i.current) || null;
   const mine = S.subs.filter((x) => x.uid === u.id);
   const pending = mine.filter((x) => x.status !== 'corrigida' && (pub.find((l) => l.id === x.lessonId) || {}).feedbackEnabled).length;
@@ -723,7 +827,7 @@ function renderDash() {
     ['Progresso médio', avg + '%', 'entre as alunas com acesso', ''],
     ['Acesso vencendo', soon.length, 'em até 30 dias', soon.length ? 'warn' : ''],
     ['Paradas', idle.length, 'sem atividade há mais de 7 dias', idle.length ? 'warn' : ''],
-    ['Correções pendentes', pend, 'aguardando a Cris', pend ? 'warn' : '']
+    ['Correções pendentes', pend, 'aguardando correção', pend ? 'warn' : '']
   ].map(([t, v, sub, cls]) => `<div class="d-tile ${cls}"><small>${t}</small><b>${v}</b><span>${sub}</span></div>`).join('');
 
   let rows = all.filter((x) => S.dFilter === 'all' || (S.dFilter === 'soon' && !x.ended && (x.acc.level === 'soon' || x.acc.level === 'urgent'))
@@ -845,7 +949,7 @@ $('students').addEventListener('click', async (e) => {
 
 $('s-gen').onclick = () => ($('s-pass').value = genPassword());
 
-/* instancia secundaria: cria o login sem deslogar a Cris */
+/* instancia secundaria: cria o login sem deslogar a administradora */
 function secondaryAuth() {
   const app = getApps().find((a) => a.name === 'secondary') || initializeApp(firebaseConfig, 'secondary');
   return getAuth(app);
@@ -887,7 +991,7 @@ Senha provisória: ${pass}${until ? `\nAcesso até: ${fmtDMY(until)}` : ''}`)}</
 
 
 /* ============================================================
-   Correcoes: respostas das alunas e feedback da Cris
+   Correcoes: respostas das alunas e feedback
    ============================================================ */
 function renderSubs() {
   const fbOn = (x) => { const ls = (S.lessons || []).find((q) => q.id === x.lessonId); return !ls || !!ls.feedbackEnabled; };

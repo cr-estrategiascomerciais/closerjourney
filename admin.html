@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Painel da Cris | Closer Journey</title>
+<title>Painel administrativo | Closer Journey</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=15">
+<link rel="stylesheet" href="area.css?v=16">
 </head>
 <body class="area embarque">
 
@@ -25,7 +25,7 @@
 <div id="v-login" class="login-shell" hidden>
   <div class="ticket-card">
     <img class="logo" src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
-    <h1>Painel da Cris</h1>
+    <h1>Painel Closer Journey</h1>
     <p class="lead">Acesso restrito à administração.</p>
     <hr>
     <form id="login-form" class="f" novalidate>
@@ -61,7 +61,7 @@
 
   <main class="a-wrap wide">
     <span class="eyebrow">Administração</span>
-    <h1 class="a-title">Painel da Cris</h1>
+    <h1 class="a-title">Painel Closer Journey</h1>
     <p class="a-sub">Gerencie aulas, atividades, encontros e acessos das alunas.</p>
 
     <div class="tabs" role="tablist">
@@ -69,6 +69,7 @@
       <button class="tab" role="tab" data-tab="cal" aria-selected="false">Calendário</button>
       <button class="tab" role="tab" data-tab="corr" aria-selected="false" id="tab-corr">Correções</button>
       <button class="tab" role="tab" data-tab="dash" aria-selected="false">Acompanhamento</button>
+      <button class="tab" role="tab" data-tab="hot" aria-selected="false">Hotseats</button>
       <button class="tab" role="tab" data-tab="alunas" aria-selected="false">Alunas</button>
     </div>
 
@@ -137,6 +138,8 @@
           </div>
           <label>Link da sala (Meet, Zoom...) <input id="b-link" type="url" placeholder="https://"></label>
           <label>Observações <textarea id="b-notes" placeholder="Opcional. Ex.: leve o seu caso para discutir."></textarea></label>
+          <label>Regras do encontro <span class="hint">Opcional. Aparece em destaque para a aluna ao abrir o encontro.</span> <textarea id="b-rules" placeholder="Ex.: câmera aberta, chegar com 5 minutos de antecedência..."></textarea></label>
+          <label class="check"><input type="checkbox" id="b-q"> Abrir caixa de dúvidas <span class="hint">Depois de se inscrever, a aluna deixa dúvidas até o dia anterior. Todas as alunas veem as dúvidas.</span></label>
           <div><b style="font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-soft)">Prévia</b>
             <ul class="preview" id="b-prev"></ul></div>
           <div id="b-msg" class="msg" hidden></div>
@@ -164,6 +167,7 @@
         <div class="legend">
           <span><i class="t-hotseat"></i>Hotseat</span><span><i class="t-roleplay"></i>Roleplay</span>
           <span><i class="t-aula"></i>Aula ao vivo</span><span><i class="t-outro"></i>Outro</span>
+          <span><i class="t-niver"></i>Aniversário</span>
         </div>
       </div>
     </section>
@@ -199,6 +203,16 @@
         </label>
       </div>
       <ul class="a-list d-list" id="d-list"></ul>
+    </section>
+
+    <!-- HOTSEATS -->
+    <section id="t-hot" hidden>
+      <div class="panel">
+        <h3>Hotseats gravados</h3>
+        <p class="sub">Suba as gravações dos hotseats. As alunas veem na área "Hotseats" do menu.</p>
+        <div class="btn-row" style="margin-bottom:14px"><button class="btn btn-primary small" id="new-hs" type="button">+ Novo hotseat</button></div>
+        <div id="hs-list"></div>
+      </div>
     </section>
 
     <!-- ALUNAS -->
@@ -244,6 +258,6 @@
 <div class="modal" id="modal" hidden><div class="box" id="box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="admin.js?v=15"></script>
+<script type="module" src="admin.js?v=16"></script>
 </body>
 </html>

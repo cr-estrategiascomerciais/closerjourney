@@ -10,8 +10,10 @@ export const EVENT_TYPES = {
   hotseat:  { label: 'Hotseat',      cls: 't-hotseat'  },
   roleplay: { label: 'Roleplay',     cls: 't-roleplay' },
   aula:     { label: 'Aula ao vivo', cls: 't-aula'     },
-  outro:    { label: 'Outro',        cls: 't-outro'    }
+  outro:    { label: 'Outro',        cls: 't-outro'    },
+  aniversario: { label: 'Aniversário', cls: 't-niver'  }
 };
+export const EVENT_TYPES_PICK = ['hotseat', 'roleplay', 'aula', 'outro'];
 export const typeLabel = (t) => (EVENT_TYPES[t] || EVENT_TYPES.outro).label;
 export const typeCls   = (t) => (EVENT_TYPES[t] || EVENT_TYPES.outro).cls;
 
@@ -182,8 +184,9 @@ export function renderCalendar({ year, month, events, today }) {
   const dows = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d) => `<div class="cal-dow">${d}</div>`).join('');
   const body = monthGrid(year, month).map((c) => {
     const evs = (byDay[c.key] || []).sort((a, b) => a.start - b.start);
-    const chips = evs.map((ev) =>
-      `<button type="button" class="chip ${typeCls(ev.type)}" data-ev="${esc(ev.id)}" title="${esc(ev.title)}">${esc(fmtTime(ev.start))} ${esc(ev.title)}</button>`
+    const chips = evs.map((ev) => ev.bd
+      ? `<span class="chip t-niver" title="${esc(ev.title)}">${esc(ev.title)}</span>`
+      : `<button type="button" class="chip ${typeCls(ev.type)}" data-ev="${esc(ev.id)}" title="${esc(ev.title)}">${esc(fmtTime(ev.start))} ${esc(ev.title)}</button>`
     ).join('');
     return `<div class="cal-cell${c.inMonth ? '' : ' is-out'}${c.key === today ? ' is-today' : ''}" data-day="${c.key}">` +
            `<span class="cal-day">${c.day}</span><div class="cal-chips">${chips}</div></div>`;
@@ -195,6 +198,28 @@ export function renderCalendar({ year, month, events, today }) {
 export function eventsOfMonth(events, year, month) {
   const prefix = `${year}-${String(month + 1).padStart(2, '0')}`;
   return events.filter((e) => brParts(e.start).date.startsWith(prefix)).sort((a, b) => a.start - b.start);
+}
+
+/* aniversarios (guardados so com dia e mes) viram itens do calendario do ano mostrado */
+export function birthdayEvents(list, year) {
+  return (list || []).filter((b) => b.month && b.day).map((b) => ({
+    id: 'bd_' + b.uid, bd: true, type: 'aniversario', title: '🎂 ' + (b.name || 'Aniversário'),
+    start: new Date(Date.UTC(year, b.month - 1, b.day, 15, 0, 0))
+  }));
+}
+
+/* link "adicionar ao Google Agenda" com a conta oficial como convidada */
+export const OFFICIAL_CAL = 'contato.closerjourney@gmail.com';
+export function googleCalLink(ev) {
+  const f = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const end = new Date(ev.start.getTime() + (ev.durationMin || 60) * 60000);
+  const link = safeUrl(ev.link);
+  const p = new URLSearchParams({
+    action: 'TEMPLATE', text: 'Closer Journey: ' + ev.title, dates: `${f(ev.start)}/${f(end)}`,
+    details: [ev.notes, link ? 'Link da reunião: ' + link : ''].filter(Boolean).join('\n\n'),
+    location: link || '', add: OFFICIAL_CAL
+  });
+  return 'https://calendar.google.com/calendar/render?' + p.toString();
 }
 
 /* ---------- arquivo .ics ("adicionar ao meu calendario") ---------- */
@@ -213,6 +238,8 @@ export function buildICS(ev) {
     `DTSTART:${f(ev.start)}`,
     `DTEND:${f(end)}`,
     `SUMMARY:${t('Closer Journey: ' + ev.title)}`,
+    `ATTENDEE;CN=Closer Journey;RSVP=FALSE:mailto:${OFFICIAL_CAL}`,
+    ...(link ? [`LOCATION:${t(link)}`, `URL:${link}`] : []),
     `DESCRIPTION:${t([ev.notes, link].filter(Boolean).join('\n'))}`,
     link ? `URL:${link}` : '',
     'END:VEVENT', 'END:VCALENDAR'
@@ -237,6 +264,8 @@ export function computeTrail(lessons, completed) {
   let allPrevDone = true;
   return lessons.map((l) => {
     const done = !!completed[l.id];
+    /* aula sem dependencia: sempre aberta e nao trava as proximas */
+    if (l.independent) return { ...l, done, unlocked: true, current: false };
     const unlocked = allPrevDone || done;
     const current = !done && allPrevDone;
     allPrevDone = allPrevDone && done;
@@ -248,7 +277,7 @@ export function computeTrail(lessons, completed) {
 export function canUnmark(trail, id) {
   const i = trail.findIndex((l) => l.id === id);
   if (i < 0) return false;
-  return !trail.slice(i + 1).some((l) => l.done);
+  return !trail.slice(i + 1).some((l) => l.done && !l.independent);
 }
 
 /* agrupa itens consecutivos do mesmo modulo */
@@ -459,3 +488,57 @@ export function agoLabel(ts, now = new Date()) {
   if (n === 1) return 'Ontem';
   return `Há ${n} dias`;
 }
+
+
+/* ============================================================
+   Hotseats: minutagem (mm:ss ou hh:mm:ss)
+   ============================================================ */
+export const parseTs = (s) => {
+  const m = String(s).trim().match(/^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})$/);
+  return m ? (Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3])) : null;
+};
+export const fmtTs = (sec) => {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  const p = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(s)}` : `${p(m)}:${p(s)}`;
+};
+
+/* le a transcricao e acha as linhas que comecam com horario, como
+   "[00:12:30] Ana: texto", "(12:30) texto" ou "00:12:30 Ana: texto" */
+export function transcriptStamps(text) {
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach((line) => {
+    const m = line.match(/^\s*[\[(]?(\d{1,2}:\d{2}(?::\d{2})?)[\])]?\s*[-–:]?\s*(.*)$/);
+    if (!m) return;
+    const t = parseTs(m[1]);
+    if (t != null) out.push({ t, text: m[2].trim() });
+  });
+  return out;
+}
+
+/* minutagem automatica: um marcador a cada "gap" segundos (padrao 5 min), com o inicio da fala como titulo */
+export function chaptersFromTranscript(text, gap = 300) {
+  const st = transcriptStamps(text).filter((x) => x.text);
+  const out = []; let last = -1e9;
+  st.forEach((x) => {
+    if (x.t - last >= gap) {
+      let label = x.text.replace(/^[^:]{1,40}:\s*/, (mm) => mm); // mantem quem fala
+      if (label.length > 80) label = label.slice(0, 77).trim() + '...';
+      out.push({ t: x.t, label }); last = x.t;
+    }
+  });
+  return out;
+}
+
+/* texto "mm:ss titulo" por linha <-> lista */
+export function parseChapters(text) {
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach((line) => {
+    const m = line.match(/^\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–]?\s*(.*)$/);
+    if (!m) return;
+    const t = parseTs(m[1]);
+    if (t != null) out.push({ t, label: m[2].trim() || fmtTs(t) });
+  });
+  return out.sort((x, y) => x.t - y.t);
+}
+export const chaptersToText = (list) => (list || []).map((c) => `${fmtTs(c.t)} ${c.label}`).join('\n');

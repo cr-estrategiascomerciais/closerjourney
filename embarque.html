@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=15">
+<link rel="stylesheet" href="area.css?v=16">
 </head>
 <body class="area embarque">
 
@@ -29,14 +29,15 @@
   <div class="ticket-card">
     <img class="logo" src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
     <h1>Área de Embarque</h1>
-    <p class="lead">Use o e-mail e a senha que a Cris enviou para você.</p>
+    <p class="lead">Use o e-mail e a senha que você recebeu da Closer Journey.</p>
     <hr>
     <form id="login-form" class="f" novalidate>
       <label>E-mail
         <input id="l-email" type="email" autocomplete="username" required>
       </label>
       <label>Senha
-        <input id="l-pass" type="password" autocomplete="current-password" required>
+        <span class="pw"><input id="l-pass" type="password" autocomplete="current-password" required>
+          <button type="button" class="pw-eye" id="l-eye" aria-label="Mostrar senha" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path class="slash" d="M4 4l16 16"/></svg></button></span>
       </label>
       <div id="l-msg" class="msg err" hidden></div>
       <button class="btn btn-primary" type="submit" id="l-btn">Entrar</button>
@@ -51,7 +52,7 @@
   <div class="ticket-card">
     <img class="logo" src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
     <h1>Acesso não liberado</h1>
-    <p class="lead" id="denied-text">Seu login existe, mas ainda não está liberado para a Área de Embarque. Fale com a Cris.</p>
+    <p class="lead" id="denied-text">Seu login existe, mas ainda não está liberado para a Área de Embarque. Fale com a equipe Closer Journey.</p>
     <button class="btn btn-ghost" id="denied-out" type="button" style="width:100%">Sair</button>
   </div>
 </div>
@@ -62,8 +63,8 @@
     <div class="inner">
       <a class="brand" href="index.html"><img src="assets/logo-full-cream-on-transparent.png" alt="Closer Journey"></a>
       <div class="who">
-        <span class="nm">Olá, <strong id="who-name"></strong></span>
-        <a id="admin-link" class="link-btn" href="admin.html" hidden>Painel da Cris</a>
+        <button class="who-btn" id="who-btn" type="button" title="Meu perfil"><span class="avatar" id="who-av"></span><span class="nm">Olá, <strong id="who-name"></strong></span></button>
+        <a id="admin-link" class="link-btn" href="admin.html" hidden>Painel Closer Journey</a>
         <button class="link-btn" id="logout" type="button">Sair</button>
       </div>
     </div>
@@ -77,6 +78,7 @@
         <button class="side-home" id="side-home" type="button">Visão geral</button>
         <button class="side-home" id="side-mat" type="button">Material de apoio</button>
         <button class="side-home" id="side-pass" type="button">Meu passaporte</button>
+        <button class="side-home" id="side-hs" type="button">Hotseats</button>
         <div id="side-list"></div>
         <div class="side-legend" aria-hidden="true"><span><i class="k-aula"></i>Aula</span><span><i class="k-ativ"></i>Atividade</span></div>
       </div>
@@ -95,16 +97,21 @@
         <button class="tab" role="tab" id="tab-cal" aria-selected="false">Calendário de encontros</button>
         <button class="tab" role="tab" id="tab-mat" aria-selected="false">Material de apoio</button>
         <button class="tab" role="tab" id="tab-pass" aria-selected="false">Meu passaporte</button>
+        <button class="tab" role="tab" id="tab-hs" aria-selected="false">Hotseats</button>
       </div>
 
       <div id="p-trilha">
         <div class="progress-card">
           <h2>Seu progresso</h2><div class="pct" id="pct">0%</div>
-          <div class="bar"><i id="bar" style="width:0"></i></div>
+          <div class="bar-wrap" id="bar-wrap"><div class="bar"><i id="bar" style="width:0"></i><div class="bar-ticks"></div></div><div class="bar-legend"></div></div>
         </div>
         <div id="next-up"></div>
         <div id="export-all"></div>
         <div id="trail"></div>
+      </div>
+
+      <div id="p-hs" hidden>
+        <div id="hs-body"></div>
       </div>
 
       <div id="p-pass" hidden>
@@ -132,6 +139,7 @@
           <span><i class="t-roleplay"></i>Roleplay</span>
           <span><i class="t-aula"></i>Aula ao vivo</span>
           <span><i class="t-outro"></i>Outro</span>
+          <span><i class="t-niver"></i>Aniversário</span>
         </div>
         <h3 class="h-agenda">Próximos encontros</h3>
         <ul class="agenda" id="agenda"></ul>
@@ -147,8 +155,9 @@
 
 <!-- modal de encontro -->
 <div class="modal" id="ev-modal" hidden><div class="box" id="ev-box"></div></div>
+<div class="modal" id="gen-modal" hidden><div class="box" id="gen-box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="embarque.js?v=15"></script>
+<script type="module" src="embarque.js?v=16"></script>
 </body>
 </html>
