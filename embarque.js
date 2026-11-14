@@ -10,7 +10,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, birthdayEvents, googleCalLink, fromBr, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, fmtTs, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp, accessInfo, fmtDMY
-} from './cj-utils.js?v=17';
+} from './cj-utils.js?v=18';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -18,7 +18,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', descClosed: false, doneAt: {}, welcomed: false, welcomeShown: false, newStamp: '', tab: 'trilha', signups: [], hotseats: [], hsTab: 'mine', questions: [], birthdays: [], closerForm: false, qDraft: '', openEv: null, joining: false, rpError: '', editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', descClosed: false, doneAt: {}, welcomed: false, welcomeShown: false, newStamp: '', ppOpen: false, ppPage: 0, tab: 'trilha', signups: [], hotseats: [], hsTab: 'mine', questions: [], birthdays: [], closerForm: false, qDraft: '', openEv: null, joining: false, rpError: '', editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -440,23 +440,91 @@ function stampSvg(m, i) {
 function renderPassport(mods) {
   const box = $('pass-body');
   if (!box) return;
-  const got = mods.filter((m) => m.complete).length;
   if (!mods.length) { box.innerHTML = '<div class="empty">Seu passaporte aparece quando os módulos da jornada forem publicados.</div>'; return; }
-  const all = got === mods.length;
+  const got = mods.filter((m) => m.complete).length;
   const fresh = state.newStamp;
-  box.innerHTML = `
-    <div class="passport">
-      <div class="pp-head">
-        <div><small>Closer Journey</small><h2>Passaporte</h2></div>
-        <div class="pp-count"><b>${got}</b><span>de ${mods.length} carimbo${mods.length > 1 ? 's' : ''}</span></div>
+  const PER = 4;
+  const p = state.profile || {};
+  const uid = (state.user && state.user.uid) || '';
+  const num = 'CJ' + uid.slice(0, 7).toUpperCase().padEnd(7, '0');
+  const issued = p.createdAt && p.createdAt.toDate ? fmtDMY(brParts(p.createdAt.toDate()).date) : '';
+  const until = p.accessUntil && p.accessUntil.toDate ? fmtDMY(brParts(p.accessUntil.toDate()).date) : '';
+  const nm = (p.name || '').trim();
+  const mrz1 = ('P<BRA<CJ<' + nm.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z ]/g, '').trim().replace(/\s+/g, '<')).padEnd(34, '<').slice(0, 34);
+  const mrz2 = (num + '<<' + got + 'DE' + mods.length + '<CARIMBOS<<<<<<<<<<<<<<<').slice(0, 34);
+  const identity = `<div class="pp-page pp-id">
+      <div class="pp-ph">Passaporte · Passport</div>
+      <div class="pp-idrow">
+        <div class="pp-photo">${p.photo ? `<img src="${esc(p.photo)}" alt="">` : `<span>${esc((firstName(nm) || '?').slice(0, 1).toUpperCase())}</span>`}</div>
+        <dl>
+          <dt>Nome / Name</dt><dd>${esc(nm || 'Aluna')}</dd>
+          <dt>Nº do passaporte</dt><dd>${esc(num)}</dd>
+          <dt>Emissão</dt><dd>${esc(issued || 'Embarque')}</dd>
+          <dt>Válido até</dt><dd>${esc(until || 'Sem limite')}</dd>
+        </dl>
       </div>
-      <p class="pp-sub">${all ? 'Passaporte completo! Você percorreu toda a jornada.' : 'Cada módulo finalizado vira um carimbo. Conclua todas as etapas de um módulo para conquistar o próximo.'}</p>
-      <div class="stamps">
-        ${mods.map((m, i) => m.complete
-          ? `<div class="slot has${fresh === m.name ? ' is-new' : ''}"><div class="stamp" style="--rot:${STAMP_ROT[i % 6]}deg">${stampSvg(m, i)}</div><div class="cap"><b>${esc(modName(m.name))}</b><span>${m.done}/${m.total} etapas</span></div></div>`
-          : `<div class="slot"><div class="stamp empty"><span>${i + 1}</span></div><div class="cap"><b>${esc(modName(m.name))}</b><span>${m.done}/${m.total} etapas${m.done ? '' : ' · a conquistar'}</span></div></div>`).join('')}
-      </div>
+      <div class="pp-mrz"><span>${esc(mrz1)}</span><span>${esc(mrz2)}</span></div>
+      <div class="pp-pn">Closer Journey</div>
     </div>`;
+  const pages = [identity];
+  for (let k = 0; k < mods.length; k += PER) {
+    const chunk = mods.slice(k, k + PER);
+    pages.push(`<div class="pp-page pp-vistos">
+        <div class="pp-ph">Vistos · Carimbos</div>
+        <div class="pp-grid">${chunk.map((m, j) => { const i = k + j; return m.complete
+          ? `<div class="pp-slot has${fresh === m.name ? ' is-new' : ''}"><div class="stamp" style="--rot:${STAMP_ROT[i % 6]}deg">${stampSvg(m, i)}</div><div class="cap"><b>${esc(modName(m.name))}</b></div></div>`
+          : `<div class="pp-slot"><div class="stamp empty"><span>${i + 1}</span></div><div class="cap"><b>${esc(modName(m.name))}</b><span>${m.done}/${m.total} etapas${m.done ? '' : ' · a conquistar'}</span></div></div>`; }).join('')}</div>
+        <div class="pp-pn">${pages.length + 1}</div>
+      </div>`);
+  }
+  if (pages.length % 2) pages.push('<div class="pp-page pp-vistos pp-blank"><div class="pp-ph">Vistos · Carimbos</div><div class="pp-wm">✈︎</div><div class="pp-pn">' + (pages.length + 1) + '</div></div>');
+  pages[0] = pages[0].replace('<div class="pp-pn">Closer Journey</div>', '<div class="pp-pn">1</div>');
+  const spreads = pages.length / 2;
+  if (fresh) {
+    const idx = mods.findIndex((m) => m.name === fresh);
+    if (idx >= 0) { state.ppPage = Math.floor((idx + 1) / PER) ; state.ppOpen = true; }
+  }
+  state.ppPage = Math.max(0, Math.min(spreads - 1, state.ppPage || 0));
+  const all = got === mods.length;
+  if (!state.ppOpen) {
+    box.innerHTML = `<div class="pp-wrap">
+      <button class="pp-cover" type="button" data-pp="open" aria-label="Abrir passaporte">
+        <span class="pp-edge"></span>
+        <span class="pp-emblem"><svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="50" cy="50" r="40"/><circle cx="50" cy="50" r="33" stroke-width=".8"/><path d="M50 10v80M10 50h80" stroke-width=".7"/><path d="M50 22l5 28 20 10-20 4-5 14-5-14-20-4 20-10z" fill="currentColor" stroke="none"/></svg></span>
+        <span class="pp-ctitle">PASSAPORTE</span>
+        <span class="pp-csub">Closer Journey</span>
+        <span class="pp-ccount"><b>${got}</b> de ${mods.length} carimbo${mods.length > 1 ? 's' : ''}</span>
+        <span class="pp-open">Toque para abrir</span>
+      </button>
+      <p class="pp-note">${all ? 'Passaporte completo! Você percorreu toda a jornada.' : 'Cada módulo finalizado vira um carimbo no seu passaporte.'}</p>
+    </div>`;
+  } else {
+    const L = pages[state.ppPage * 2], R = pages[state.ppPage * 2 + 1];
+    box.innerHTML = `<div class="pp-wrap">
+      <div class="pp-book" data-spread="${state.ppPage}">
+        <div class="pp-spread">${L}${R}</div>
+      </div>
+      <div class="pp-nav">
+        <button class="btn btn-ghost" type="button" data-pp="prev"${state.ppPage === 0 ? ' disabled' : ''}>‹ Anterior</button>
+        <span>${state.ppPage + 1} / ${spreads}</span>
+        <button class="btn btn-ghost" type="button" data-pp="next"${state.ppPage >= spreads - 1 ? ' disabled' : ''}>Próxima ›</button>
+      </div>
+      <div class="pp-nav"><button class="link-btn" type="button" data-pp="close">Fechar passaporte</button></div>
+    </div>`;
+  }
+  if (!box.dataset.ppBound) {
+    box.dataset.ppBound = '1';
+    box.addEventListener('click', (e) => {
+      const t = e.target.closest('[data-pp]');
+      if (!t || t.disabled) return;
+      const k = t.dataset.pp;
+      if (k === 'open') state.ppOpen = true;
+      else if (k === 'close') state.ppOpen = false;
+      else if (k === 'prev') state.ppPage = Math.max(0, (state.ppPage || 0) - 1);
+      else if (k === 'next') state.ppPage = (state.ppPage || 0) + 1;
+      render();
+    });
+  }
   if (fresh && state.tab === 'pass') state.newStamp = '';
 }
 
@@ -1338,7 +1406,7 @@ function showStampModal(m) {
       <div class="btn-row sp-btns"><button class="btn btn-primary" id="sp-pass" type="button">Ver meu passaporte</button><button class="link-btn" id="sp-ok" type="button">Continuar</button></div>
     </div>`, 'sticky');
   $('sp-ok').onclick = genClose;
-  $('sp-pass').onclick = () => { genClose(); showHome(); setTab('pass'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+  $('sp-pass').onclick = () => { state.ppOpen = true; genClose(); showHome(); setTab('pass'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
 }
 
 async function setDone(id, value, next) {
