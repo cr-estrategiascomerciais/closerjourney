@@ -10,7 +10,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, birthdayEvents, googleCalLink, fromBr, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, fmtTs, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp, accessInfo, fmtDMY
-} from './cj-utils.js?v=18';
+} from './cj-utils.js?v=19';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -404,7 +404,7 @@ function render() {
    ============================================================ */
 function passportModules(completed = state.completed, doneAt = state.doneAt) {
   const map = new Map();
-  computeTrail(state.lessons, completed).filter((l) => !l.independent).forEach((l) => {
+  computeTrail(state.lessons, completed).forEach((l) => {
     const k = (l.module || 'Sem módulo').trim() || 'Sem módulo';
     if (!map.has(k)) map.set(k, []);
     map.get(k).push(l);
@@ -575,7 +575,6 @@ $('side').addEventListener('click', (ev) => { if (ev.target.closest('button') &&
 
 function renderBarDividers(items) {
   const wrap = $('bar-wrap'); if (!wrap) return;
-  items = items.filter((i) => !i.independent);
   if (!items.length) { wrap.querySelector('.bar-ticks').innerHTML = ''; wrap.querySelector('.bar-legend').innerHTML = ''; return; }
   const groups = groupByModule(items);
   let acc = 0;
@@ -596,7 +595,7 @@ function renderTrail() {
     $('next-up').innerHTML = ''; $('pct').textContent = '0%'; $('bar').style.width = '0'; $('export-all').innerHTML = '';
     return;
   }
-  const req = items.filter((i) => !i.independent);
+  const req = items;
   const done = req.filter((i) => i.done).length;
   const pct = req.length ? Math.round((done / req.length) * 100) : 0;
   $('pct').textContent = pct + '%';

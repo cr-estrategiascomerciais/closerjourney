@@ -11,7 +11,7 @@ import {
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   parseTs, fmtTs, chaptersFromTranscript, parseChapters, chaptersToText, genDates, renderCalendar, birthdayEvents, EVENT_TYPES_PICK, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
-} from './cj-utils.js?v=18';
+} from './cj-utils.js?v=19';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
@@ -300,7 +300,7 @@ function lessonModal(l, kindDefault, moduleDefault, newModule) {
       <div id="m-vcheck" class="msg" hidden></div>
       <label>Link do material ou da atividade <span class="hint">Notion, Google Docs, formulário... (opcional)</span>
         <input id="m-link" value="${esc(l ? l.linkUrl : '')}" placeholder="https://"></label>
-      <label class="check"><input type="checkbox" id="m-indep" ${l && l.independent ? 'checked' : ''}> Sem dependência <span class="hint">A aluna pode abrir a qualquer momento, sem finalizar as etapas anteriores. Não trava as próximas e não conta no progresso nem no carimbo.</span></label>
+      <label class="check"><input type="checkbox" id="m-indep" ${l && l.independent ? 'checked' : ''}> Sem dependência <span class="hint">A aluna pode abrir a qualquer momento, sem finalizar as etapas anteriores. Não trava as próximas, mas conta no progresso e no carimbo do módulo.</span></label>
       <label class="check"><input type="checkbox" id="m-pub" ${!l || l.published ? 'checked' : ''}> Publicada (visível para as alunas)</label>
       <div id="m-msg" class="msg err" hidden></div>
       <div class="foot">
@@ -796,7 +796,7 @@ function studentStats(u) {
   const pub = S.lessons.filter((l) => l.published);
   const prog = S.progress[u.id] || {};
   const items = computeTrail(pub, prog.completed || {});
-  const req = items.filter((i) => !i.independent);
+  const req = items;
   const done = req.filter((i) => i.done).length;
   const total = req.length;
   const cur = items.find((i) => i.current) || null;
