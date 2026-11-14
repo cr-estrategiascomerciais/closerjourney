@@ -11,7 +11,7 @@ import {
 import {
   esc, safeUrl, parseVideo, parseDriveFile, fmtStamp, parseFields, normalizeFields, newId, typeLabel, EVENT_TYPES, brParts, fromBr, fmtTime, dayLabel, fmtDMY,
   parseTs, fmtTs, chaptersFromTranscript, parseChapters, chaptersToText, genDates, renderCalendar, birthdayEvents, EVENT_TYPES_PICK, eventsOfMonth, monthLabel, todayKey, groupByModule, friendlyError, genPassword, computeTrail, accessInfo, addMonthsKey, endOfDayBr, agoLabel
-} from './cj-utils.js?v=16';
+} from './cj-utils.js?v=17';
 import { TRILHA_PADRAO } from './trilha-padrao.js';
 
 const $ = (id) => document.getElementById(id);
@@ -131,7 +131,7 @@ function renderLessons() {
   }
   const idxOf = (id) => S.lessons.findIndex((l) => l.id === id);
   box.innerHTML = groupByModule(S.lessons).map((g) => `
-    <div class="mod-title">${esc(g.module)}</div>
+    <div class="mod-title">${esc('✈︎ ' + String(g.module).replace(/^[^\p{L}\p{N}]+/u, ''))}</div>
     <ul class="a-list">${g.items.map((l) => {
       const i = idxOf(l.id);
       const hasVideo = !!parseVideo(l.videoUrl);
@@ -163,7 +163,7 @@ function renderSideAdmin() {
     return `<div class="side-mod${closed ? ' is-collapsed' : ''}">
       <div class="side-mod-row">
         <button type="button" class="side-mod-h" data-smod="${esc(g.module)}" aria-expanded="${!closed}">
-          <span class="nm">${esc(g.module)}</span><small>${g.items.length}</small><i class="chev"></i></button>
+          <span class="nm">${esc('✈︎ ' + String(g.module).replace(/^[^\p{L}\p{N}]+/u, ''))}</span><small>${g.items.length}</small><i class="chev"></i></button>
         <button type="button" class="side-plus" data-addin="${esc(g.module)}" title="Nova aula neste módulo" aria-label="Nova aula neste módulo">+</button>
       </div>
       <ul>${g.items.map((l) => `<li><button type="button" class="side-item${l.published ? '' : ' draft'}" data-jump="${esc(l.id)}">

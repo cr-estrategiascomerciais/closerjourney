@@ -10,7 +10,7 @@ import {
   esc, linkify, safeUrl, firstName, parseVideo, typeLabel, typeCls, brParts, fmtTime, fmtDay,
   fmtLong, renderCalendar, birthdayEvents, googleCalLink, fromBr, eventsOfMonth, monthLabel, downloadICS, computeTrail, canUnmark,
   groupByModule, fmtTs, friendlyError, todayKey, renderRich, parseDriveFile, fmtStamp, accessInfo, fmtDMY
-} from './cj-utils.js?v=16';
+} from './cj-utils.js?v=17';
 
 const $ = (id) => document.getElementById(id);
 const views = ['v-loading', 'v-setup', 'v-login', 'v-denied', 'v-app'];
@@ -18,7 +18,7 @@ const show = (id) => views.forEach((v) => ($(v).hidden = v !== id));
 
 const state = {
   user: null, profile: null,
-  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', sideHidden: (() => { try { return localStorage.getItem('cj-sidehidden') === '1'; } catch { return false; } })(), descClosed: false, doneAt: {}, welcomed: false, welcomeShown: false, newStamp: '', tab: 'trilha', signups: [], hotseats: [], hsTab: 'mine', questions: [], birthdays: [], closerForm: false, qDraft: '', openEv: null, joining: false, rpError: '', editingSub: false,
+  lessons: [], events: [], completed: {}, collapsed: {}, subs: {}, notes: {}, imgs: {}, imgErr: '', descClosed: false, doneAt: {}, welcomed: false, welcomeShown: false, newStamp: '', tab: 'trilha', signups: [], hotseats: [], hsTab: 'mine', questions: [], birthdays: [], closerForm: false, qDraft: '', openEv: null, joining: false, rpError: '', editingSub: false,
   unsubs: [], openLesson: null,
   calYear: 0, calMonth: 0
 };
@@ -32,6 +32,7 @@ const ICON = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg>'
 };
 
+const modName = (m) => '✈︎ ' + String(m || 'Sem módulo').replace(/^[^\p{L}\p{N}]+/u, '');
 const WA = 'https://web.whatsapp.com/send?phone=5531982298811';
 function renderAccessNote() {
   const box = $('access-note');
@@ -452,8 +453,8 @@ function renderPassport(mods) {
       <p class="pp-sub">${all ? 'Passaporte completo! Você percorreu toda a jornada.' : 'Cada módulo finalizado vira um carimbo. Conclua todas as etapas de um módulo para conquistar o próximo.'}</p>
       <div class="stamps">
         ${mods.map((m, i) => m.complete
-          ? `<div class="slot has${fresh === m.name ? ' is-new' : ''}"><div class="stamp" style="--rot:${STAMP_ROT[i % 6]}deg">${stampSvg(m, i)}</div><div class="cap"><b>${esc(m.name)}</b><span>${m.done}/${m.total} etapas</span></div></div>`
-          : `<div class="slot"><div class="stamp empty"><span>${i + 1}</span></div><div class="cap"><b>${esc(m.name)}</b><span>${m.done}/${m.total} etapas${m.done ? '' : ' · a conquistar'}</span></div></div>`).join('')}
+          ? `<div class="slot has${fresh === m.name ? ' is-new' : ''}"><div class="stamp" style="--rot:${STAMP_ROT[i % 6]}deg">${stampSvg(m, i)}</div><div class="cap"><b>${esc(modName(m.name))}</b><span>${m.done}/${m.total} etapas</span></div></div>`
+          : `<div class="slot"><div class="stamp empty"><span>${i + 1}</span></div><div class="cap"><b>${esc(modName(m.name))}</b><span>${m.done}/${m.total} etapas${m.done ? '' : ' · a conquistar'}</span></div></div>`).join('')}
       </div>
     </div>`;
   if (fresh && state.tab === 'pass') state.newStamp = '';
@@ -473,15 +474,15 @@ function renderSide() {
     const closed = !!state.collapsed[g.module];
     return `<div class="side-mod${closed ? ' is-collapsed' : ''}">
       <button type="button" class="side-mod-h" data-mod="${esc(g.module)}" aria-expanded="${!closed}">
-        <span class="nm">${esc(g.module)}</span><small>${done}/${g.items.length}</small><i class="chev"></i>
+        <span class="nm">${esc(modName(g.module))}</span><small>${done}/${g.items.length}</small><i class="chev"></i>
       </button>
       <ul>${g.items.map(sideItem).join('')}</ul></div>`;
   }).join('');
 }
 
 function sideItem(l) {
-  const cls = [l.done ? 'done' : '', l.current ? 'current' : '', !l.unlocked ? 'locked' : '', state.openLesson === l.id ? 'active' : ''].join(' ');
   const ativ = l.kind === 'atividade';
+  const cls = [l.done ? 'done' : '', l.current ? 'current' : '', !l.unlocked ? 'locked' : '', state.openLesson === l.id ? 'active' : '', ativ ? 'is-ativ' : 'is-aula'].join(' ');
   const st = l.done ? `<span class="sst ok" title="Finalizada">${ICON.check}</span>` : !l.unlocked ? `<span class="sst" title="Bloqueada">${ICON.lock}</span>` : '';
   return `<li><button type="button" class="side-item ${cls}" ${l.unlocked ? `data-open="${esc(l.id)}"` : 'disabled aria-disabled="true"'}>
     <span class="si ${ativ ? 'k-ativ' : 'k-aula'}" title="${ativ ? 'Atividade' : 'Aula'}">${ativ ? ICON.ativ : ICON.aula}</span><span class="tt">${esc(l.title)}</span>${st}</button></li>`;
@@ -491,14 +492,18 @@ document.addEventListener('click', (e) => {
   const m = e.target.closest('[data-mod]');
   if (m) { state.collapsed[m.dataset.mod] = !state.collapsed[m.dataset.mod]; renderSide(); }
 });
-$('side-home').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('trilha'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-$('side-pass').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('pass'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-$('side-hs').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('hs'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
-$('side-mat').addEventListener('click', () => { document.body.classList.remove('side-open'); showHome(); setTab('mat'); renderMaterial(); render(); window.scrollTo(0, 0); });
-$('side-toggle').addEventListener('click', () => {
-  const open = document.body.classList.toggle('side-open');
-  $('side-toggle').setAttribute('aria-expanded', open);
-});
+$('side-home').addEventListener('click', () => { setMenu(false); showHome(); setTab('trilha'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('side-pass').addEventListener('click', () => { setMenu(false); showHome(); setTab('pass'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('side-hs').addEventListener('click', () => { setMenu(false); showHome(); setTab('hs'); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+$('side-mat').addEventListener('click', () => { setMenu(false); showHome(); setTab('mat'); renderMaterial(); render(); window.scrollTo(0, 0); });
+$('side-cal').addEventListener('click', () => { setMenu(false); showHome(); setTab('cal'); renderCal(); render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+const setMenu = (open) => { document.body.classList.toggle('side-open', open); $('menu-btn').setAttribute('aria-expanded', open); $('menu-btn').setAttribute('aria-label', open ? 'Fechar menu' : 'Abrir menu'); };
+$('menu-btn').addEventListener('click', () => setMenu(!document.body.classList.contains('side-open')));
+$('side-x').addEventListener('click', () => setMenu(false));
+$('side-ov').addEventListener('click', () => setMenu(false));
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') setMenu(false); });
+/* ao escolher qualquer item, o menu recolhe */
+$('side').addEventListener('click', (ev) => { if (ev.target.closest('button') && !ev.target.closest('[data-mod]') && !ev.target.closest('#side-x')) setMenu(false); });
 
 function renderBarDividers(items) {
   const wrap = $('bar-wrap'); if (!wrap) return;
@@ -545,7 +550,7 @@ function renderTrail() {
 
   box.innerHTML = groupByModule(items).map((g) => `
     <div class="module">
-      <h3>${esc(g.module)}</h3>
+      <h3>${esc(modName(g.module))}</h3>
       <ul class="stops">${g.items.map(stopRow).join('')}</ul>
     </div>`).join('');
 }
@@ -564,7 +569,7 @@ function stopRow(l) {
 
 document.addEventListener('click', (e) => {
   const o = e.target.closest('[data-open]');
-  if (o && !o.disabled) { document.body.classList.remove('side-open'); openLesson(o.dataset.open); }
+  if (o && !o.disabled) { setMenu(false); openLesson(o.dataset.open); }
 });
 
 /* ============================================================
@@ -742,7 +747,6 @@ function renderHotseatView() {
       <div class="lesson-head">
         <button class="link-btn" type="button" id="back">&larr; Voltar para os hotseats</button>
         <span class="kind-tag">Hotseat · ${esc(fmtDMY(h.date))}</span>
-        <button class="link-btn side-hide" type="button" id="side-hide"></button>
       </div>
       <h1 class="a-title" id="l-title"></h1>
       <div class="lesson-split">
@@ -751,7 +755,6 @@ function renderHotseatView() {
       </div>
       <div id="l-info"></div>`;
     $('back').onclick = () => { showHome(); setTab('hs'); render(); };
-    $('side-hide').onclick = () => { state.sideHidden = !state.sideHidden; try { localStorage.setItem('cj-sidehidden', state.sideHidden ? '1' : '0'); } catch { /* ok */ } applySide(); };
     applySide();
   }
   $('l-title').textContent = h.title;
@@ -779,8 +782,15 @@ function renderHotseatView() {
   renderNotes({ id: state.openLesson, kind: 'hotseat', title: h.title, module: 'Hotseats' });
 }
 
+const TAB_TITLE = { trilha: 'Visão geral', cal: 'Calendário', mat: 'Material de apoio', pass: 'Meu passaporte', hs: 'Hotseats' };
 function syncNav() {
   const home = !state.openLesson;
+  if (home) {
+    $('page-title').textContent = TAB_TITLE[state.tab] || 'Visão geral';
+    $('hello').hidden = state.tab !== 'trilha';
+    $('access-note').hidden = state.tab !== 'trilha';
+  }
+  $('side-cal').classList.toggle('is-on', home && state.tab === 'cal');
   $('side-home').classList.toggle('is-on', home && state.tab === 'trilha');
   $('side-mat').classList.toggle('is-on', home && state.tab === 'mat');
   $('side-pass').classList.toggle('is-on', home && state.tab === 'pass');
@@ -789,9 +799,6 @@ function syncNav() {
 
 function applySide() {
   syncNav();
-  const lesson = !!state.openLesson;
-  $('layout').classList.toggle('no-side', (lesson && state.sideHidden) || (!lesson && state.tab === 'cal'));
-  const b = $('side-hide'); if (b) b.textContent = state.sideHidden ? 'Mostrar menu' : 'Recolher menu';
 }
 
 function renderLesson() {
@@ -810,7 +817,6 @@ function renderLesson() {
       <div class="lesson-head">
         <button class="link-btn" type="button" id="back">&larr; Voltar para a jornada</button>
         <span class="kind-tag" id="l-tag"></span>
-        <button class="link-btn side-hide" type="button" id="side-hide"></button>
       </div>
       <h1 class="a-title" id="l-title"></h1>
       <div class="lesson-split${l.kind === 'atividade' ? ' solo' : ''}">
@@ -821,10 +827,9 @@ function renderLesson() {
       <div id="l-sub"></div>
       <div id="l-actions"></div>`;
     $('back').onclick = showHome;
-    $('side-hide').onclick = () => { state.sideHidden = !state.sideHidden; try { localStorage.setItem('cj-sidehidden', state.sideHidden ? '1' : '0'); } catch { /* ok */ } applySide(); };
     applySide();
   }
-  $('l-tag').textContent = `${l.module} · ${l.kind === 'atividade' ? 'Atividade' : 'Aula'}`;
+  $('l-tag').textContent = `${modName(l.module)} · ${l.kind === 'atividade' ? 'Atividade' : 'Aula'}`;
   $('l-title').textContent = l.title;
 
   /* ---- video ---- */
@@ -1063,11 +1068,11 @@ function rowsHtml(rows, cls, plain = false) {
 }
 
 /* abre a impressao do navegador (a aluna escolhe "Salvar como PDF") */
-function openPrint(innerHtml, title) {
+function openPrint(innerHtml, title, opts = {}) {
   let root = document.getElementById('print-root');
   if (!root) { root = document.createElement('div'); root.id = 'print-root'; document.body.appendChild(root); }
   const name = (state.profile && state.profile.name) || '';
-  root.innerHTML = `<header class="pr-head"><img src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
+  root.innerHTML = opts.cover ? innerHtml : `<header class="pr-head"><img src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
       <div><div class="pr-h1">${esc(title)}</div><div class="pr-meta">${esc(name)}${name ? ' · ' : ''}gerado em ${new Date().toLocaleDateString('pt-BR')}</div></div></header>${innerHtml}`;
   const oldTitle = document.title;
   document.title = `${title}${name ? ' - ' + name : ''}`;
@@ -1075,10 +1080,13 @@ function openPrint(innerHtml, title) {
   let ended = false;
   const done = () => { if (ended) return; ended = true; document.body.classList.remove('printing'); document.title = oldTitle; window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
-  const img = root.querySelector('img');
   const go = () => { try { window.print(); } catch { done(); } };
-  if (img && !img.complete) { img.addEventListener('load', go, { once: true }); img.addEventListener('error', go, { once: true }); setTimeout(() => { if (!ended) go(); }, 1500); }
-  else setTimeout(go, 60);
+  const pend = [...root.querySelectorAll('img')].filter((i) => !i.complete);
+  if (pend.length) {
+    let fired = false; const once = () => { if (!fired) { fired = true; go(); } };
+    Promise.all(pend.map((i) => new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); }))).then(once);
+    setTimeout(once, opts.cover ? 6000 : 1500);
+  } else setTimeout(go, 60);
   setTimeout(done, 10 * 60 * 1000);
 }
 
@@ -1103,13 +1111,51 @@ function topics() {
     .sort((a, b) => (order.has(a.lessonId) ? order.get(a.lessonId) : 1e6) - (order.has(b.lessonId) ? order.get(b.lessonId) : 1e6));
 }
 
+/* ============================================================
+   Apostila da mentoria: descricoes e imagens de todas as aulas
+   ============================================================ */
+async function printApostila() {
+  const btn = $('apost-pdf');
+  const lessons = state.lessons;
+  if (!lessons.length) { toast('Ainda não há aulas publicadas.'); return; }
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'Montando a apostila...';
+  try {
+    const ids = [...new Set(lessons.flatMap((l) => l.images || []))].filter((id) => !state.imgs[id]);
+    await Promise.all(ids.map(async (id) => {
+      try { const s = await getDoc(doc(db, 'lessonImages', id)); if (s.exists()) state.imgs[id] = s.data().data; } catch { /* segue sem a imagem */ }
+    }));
+    const name = (state.profile && state.profile.name) || '';
+    const mods = new Map();
+    lessons.forEach((l) => { const k = (l.module || 'Sem módulo').trim() || 'Sem módulo'; if (!mods.has(k)) mods.set(k, []); mods.get(k).push(l); });
+    const today0 = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date());
+    const today = today0.charAt(0).toUpperCase() + today0.slice(1);
+    let n = 0;
+    const toc = [...mods.entries()].map(([m, ls]) => `<div class="ap-tm">${esc(modName(m))}</div><ol class="ap-tl">${ls.map((l) => `<li><span>${esc(l.title)}</span><i>${l.kind === 'atividade' ? 'Atividade' : 'Aula'}</i></li>`).join('')}</ol>`).join('');
+    const body = [...mods.entries()].map(([m, ls]) => `<section class="ap-mod"><div class="ap-modh"><small>Módulo</small>${esc(modName(m))}</div>` + ls.map((l) => {
+      n += 1;
+      const imgs = (l.images || []).map((id) => state.imgs[id]).filter(Boolean);
+      return `<article class="ap-les"><div class="ap-kind">${l.kind === 'atividade' ? 'Atividade' : 'Aula'} ${n}</div><h2>${esc(l.title)}</h2>
+        ${l.description ? `<p class="ap-desc">${linkify(l.description)}</p>` : ''}
+        ${l.body ? `<div class="ap-rich">${renderRich(l.body)}</div>` : ''}
+        ${imgs.map((d) => `<figure class="ap-fig"><img src="${d}" alt=""></figure>`).join('')}</article>`;
+    }).join('') + '</section>').join('');
+    const html = `<section class="ap-cover"><img src="assets/logo-full-dark-on-transparent.png" alt="Closer Journey">
+        <div class="ap-ck">Jornada de transformação</div><h1>Apostila da mentoria</h1><div class="ap-rule"></div>
+        <p>${name ? `Preparada para <b>${esc(name)}</b>` : 'Closer Journey'}</p><div class="ap-cd">${esc(today)}</div></section>
+      <section class="ap-toc"><h2>Sumário</h2>${toc}</section>${body}`;
+    openPrint(html, 'Apostila da mentoria', { cover: true });
+  } catch (err) { toast(friendlyError(err)); }
+  btn.disabled = false; btn.textContent = old;
+}
+$('apost-pdf').addEventListener('click', printApostila);
+
 function printMaterial(onlyId) {
   const list = topics().filter((n) => !onlyId || n.lessonId === onlyId);
   if (!list.length) { toast('Seu material de apoio ainda está vazio.'); return; }
   let lastMod = null;
   const html = list.map((n) => {
     const mod = n.module || '';
-    const head = mod !== lastMod ? (lastMod = mod, `<h3 class="pr-modh">${esc(mod)}</h3>`) : '';
+    const head = mod !== lastMod ? (lastMod = mod, `<h3 class="pr-modh">${esc(modName(mod))}</h3>`) : '';
     return `${head}<section class="pr-topic"><h2 class="pr-title">${esc(n.lessonTitle || '')}</h2>
       ${n.note ? `<div class="pr-lbl">Minhas anotações</div><div class="pr-a pr-note">${nl2br(n.note)}</div>` : ''}
       ${n.answers && n.answers.length ? `<div class="pr-lbl">Minhas respostas</div>${rowsHtml(n.answers, 'pr', true)}` : ''}</section>`;
@@ -1198,11 +1244,11 @@ function renderMaterial() {
     return;
   }
   let lastMod = null;
-  box.innerHTML = `<div class="export-bar"><div><strong>${list.length} tópico${list.length > 1 ? 's' : ''}</strong><small>Cada aula ou atividade é um tópico. Adicionar de novo atualiza o tópico.</small></div>
-      <button class="btn btn-primary small" id="mat-pdf" type="button">Baixar apostila completa (PDF)</button></div>` +
+  box.innerHTML = `<div class="export-bar"><div><strong>Material de apoio completo</strong><small>${list.length} tópico${list.length > 1 ? 's' : ''}. Cada aula ou atividade é um tópico. Adicionar de novo atualiza o tópico.</small></div>
+      <button class="btn btn-primary small" id="mat-pdf" type="button">Baixar material de apoio completo (PDF)</button></div>` +
     list.map((n) => {
       const mod = n.module || '';
-      const head = mod !== lastMod ? (lastMod = mod, `<h3 class="mat-mod">${esc(mod)}</h3>`) : '';
+      const head = mod !== lastMod ? (lastMod = mod, `<h3 class="mat-mod">${esc(modName(mod))}</h3>`) : '';
       const hsId = String(n.lessonId).startsWith('hs_') ? n.lessonId.slice(3) : '';
       const canOpen = hsId ? !!hsById(hsId) : state.lessons.some((l) => l.id === n.lessonId);
       return `${head}<article class="mat-topic" data-lid="${esc(n.lessonId)}">

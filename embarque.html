@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Jost:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
-<link rel="stylesheet" href="area.css?v=16">
+<link rel="stylesheet" href="area.css?v=17">
 </head>
 <body class="area embarque">
 
@@ -61,10 +61,12 @@
 <div id="v-app" hidden>
   <header class="a-topbar">
     <div class="inner">
+      <button class="menu-btn" id="menu-btn" type="button" aria-label="Abrir menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <a class="brand" href="index.html"><img src="assets/logo-full-cream-on-transparent.png" alt="Closer Journey"></a>
+      <span class="brand-sub">Área de Embarque</span>
       <div class="who">
         <button class="who-btn" id="who-btn" type="button" title="Meu perfil"><span class="avatar" id="who-av"></span><span class="nm">Olá, <strong id="who-name"></strong></span></button>
-        <a id="admin-link" class="link-btn" href="admin.html" hidden>Painel Closer Journey</a>
+        <a id="admin-link" class="link-btn" href="admin.html" hidden>Painel do Admin</a>
         <button class="link-btn" id="logout" type="button">Sair</button>
       </div>
     </div>
@@ -72,10 +74,12 @@
 
   <main class="a-wrap wide">
     <div class="a-layout" id="layout">
-    <aside class="side" id="side" aria-label="Módulos e aulas">
+    <aside class="side" id="side" aria-label="Menu">
+      <div class="side-top"><img src="assets/logo-full-cream-on-transparent.png" alt="Closer Journey"><button class="side-x" id="side-x" type="button" aria-label="Fechar menu">&times;</button></div>
       <div class="side-card">
         <div class="side-title">Sua jornada</div>
         <button class="side-home" id="side-home" type="button">Visão geral</button>
+        <button class="side-home" id="side-cal" type="button">Calendário</button>
         <button class="side-home" id="side-mat" type="button">Material de apoio</button>
         <button class="side-home" id="side-pass" type="button">Meu passaporte</button>
         <button class="side-home" id="side-hs" type="button">Hotseats</button>
@@ -84,15 +88,13 @@
       </div>
     </aside>
     <div class="a-main">
-    <button class="side-toggle" id="side-toggle" type="button" aria-expanded="false">Módulos e aulas</button>
     <!-- lista -->
     <section id="s-home">
-      <span class="eyebrow">Área de Embarque</span>
-      <h1 class="a-title" id="hello">Bem-vinda a bordo</h1>
-      <p class="a-sub">Cada etapa só abre depois que você finaliza a anterior. É assim que a jornada funciona.</p>
+      <h1 class="a-title" id="page-title">Visão geral</h1>
+      <p class="greet" id="hello">Bem-vinda a bordo</p>
       <div id="access-note"></div>
 
-      <div class="tabs" role="tablist">
+      <div class="tabs" role="tablist" hidden>
         <button class="tab" role="tab" id="tab-trilha" aria-selected="true">Minha jornada</button>
         <button class="tab" role="tab" id="tab-cal" aria-selected="false">Calendário de encontros</button>
         <button class="tab" role="tab" id="tab-mat" aria-selected="false">Material de apoio</button>
@@ -119,6 +121,8 @@
       </div>
 
       <div id="p-mat" hidden>
+        <div class="export-bar apost"><div><strong>Apostila da mentoria</strong><small>As descrições e imagens de todas as aulas, em um PDF com capa e sumário.</small></div>
+          <button class="btn btn-primary small" id="apost-pdf" type="button">Baixar apostila (PDF)</button></div>
         <h2 class="mat-h">Meu material de apoio</h2>
         <p class="a-sub" style="margin-top:0">Um espaço seu: anotações e respostas das atividades, organizadas por aula. Só você vê.</p>
         <div id="mat-body"></div>
@@ -155,9 +159,10 @@
 
 <!-- modal de encontro -->
 <div class="modal" id="ev-modal" hidden><div class="box" id="ev-box"></div></div>
+<div class="side-ov" id="side-ov"></div>
 <div class="modal" id="gen-modal" hidden><div class="box" id="gen-box"></div></div>
 <div id="toast" hidden></div>
 
-<script type="module" src="embarque.js?v=16"></script>
+<script type="module" src="embarque.js?v=17"></script>
 </body>
 </html>
